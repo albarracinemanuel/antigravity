@@ -55,6 +55,7 @@ setupDragDrop(dom.dropPending, dom.filePending, handlePendingFile); // NEW
 
 dom.providerSelect.addEventListener('change', renderTable);
 dom.projectionMonths.addEventListener('change', renderTable);
+document.getElementById('btn-export').addEventListener('click', exportToExcel);
 
 // --- Utils ---
 function normalizeText(text) {
@@ -424,4 +425,21 @@ function renderTable() {
     });
 
     dom.resultsSection.style.display = 'block';
+}
+
+function exportToExcel() {
+    if (!STATE.appReady) return;
+
+    const table = document.getElementById('results-table');
+    if (!table) return;
+
+    // Create workbook from table
+    const wb = XLSX.utils.table_to_book(table, { sheet: "Stock Analysis" });
+
+    // Generate filename with date
+    const today = new Date().toISOString().split('T')[0];
+    const filename = `analisis_stock_${today}.xlsx`;
+
+    // Write file
+    XLSX.writeFile(wb, filename);
 }
