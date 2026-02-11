@@ -400,9 +400,15 @@ function renderTable() {
             if (suggested < 0) suggested = 0;
             suggested = Math.ceil(suggested);
 
+            // Color Logic: Stock + Pending vs Estimates
+            const totalAvailable = stock + pending;
             let stockClass = "val-stock";
-            if (stock < (monthlyAvg * 2)) stockClass += " stock-critical";
-            else if (stock > (monthlyAvg * 6)) stockClass += " stock-excess";
+
+            // Red: (Stock + Pending) < (Average * ProjectionMonths) (User: "2 o x")
+            // Green: (Stock + Pending) > (Average * 6)
+
+            if (totalAvailable < (monthlyAvg * projMonths)) stockClass += " stock-critical";
+            else if (totalAvailable > (monthlyAvg * 6)) stockClass += " stock-excess";
 
             // Highlight suggested
             let suggStyle = "";
