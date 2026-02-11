@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Stock por Zonas</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- SheetJS para leer XLS/XLSX -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- PapaParse para leer CSV de forma robusta -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Gestión de Stock por Zonas</h1>
+            <p>Consolidación de Stock y Ventas por Proveedor</p>
+        </header>
+
+        <!-- Configuración Global -->
+        <section class="config-panel">
+            <div class="config-item">
+                <label for="historyMonths">Meses Historia (Calc):</label>
+                <input type="number" id="historyMonths" value="0" readonly
+                    style="background-color: #e2e8f0; color: #64748b;">
+                <small id="date-range-info"
+                    style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 4px;"></small>
+            </div>
+            <div class="config-item">
+                <label for="projectionMonths">Meses Proyección:</label>
+                <input type="number" id="projectionMonths" value="2" min="1">
+            </div>
+        </section>
+
+        <!-- Zona de Carga de Archivos -->
+        <section class="upload-grid">
+            <!-- Archivo 1: Proveedores (XLS) -->
+            <div class="drop-zone" id="drop-providers">
+                <div class="icon">👥</div>
+                <h3>1. Proveedores</h3>
+                <p>Archivo .xls/.xlsx</p>
+                <small>Requiere: cod_alfa, proveedor</small>
+                <input type="file" id="file-providers" accept=".xls,.xlsx" hidden>
+                <button class="btn-action" onclick="document.getElementById('file-providers').click()">Cargar
+                    XLS</button>
+                <div class="status" id="status-providers">Pendiente</div>
+            </div>
+
+            <!-- Archivo 2: Stock (CSV) -->
+            <div class="drop-zone" id="drop-stock">
+                <div class="icon">📦</div>
+                <h3>2. Stock del Día</h3>
+                <p>Archivo .csv (ej: 10022026)</p>
+                <small>Requiere: codalfa, nom_area, disponible</small>
+                <input type="file" id="file-stock" accept=".csv,.txt" hidden>
+                <button class="btn-action" onclick="document.getElementById('file-stock').click()">Cargar CSV</button>
+                <div class="status" id="status-stock">Pendiente</div>
+            </div>
+
+            <!-- Archivo 3: Ventas (CSV) -->
+            <div class="drop-zone" id="drop-sales">
+                <div class="icon">💰</div>
+                <h3>3. Ventas Planas</h3>
+                <p>Archivo .csv</p>
+                <small>Requiere: cod_alfa, nom_area, cantidad</small>
+                <input type="file" id="file-sales" accept=".csv,.txt" hidden>
+                <button class="btn-action" onclick="document.getElementById('file-sales').click()">Cargar CSV</button>
+                <div class="status" id="status-sales">Pendiente</div>
+            </div>
+
+            <!-- Archivo 4: Pendientes (CSV) -->
+            <div class="drop-zone" id="drop-pending">
+                <div class="icon">🚚</div>
+                <h3>4. Mercadería Pendiente</h3>
+                <p>Archivo .csv</p>
+                <small>Requiere: cod_alfa, nom_area, pendiente</small>
+                <input type="file" id="file-pending" accept=".csv,.txt" hidden>
+                <button class="btn-action" onclick="document.getElementById('file-pending').click()">Cargar CSV</button>
+                <div class="status" id="status-pending">Pendiente</div>
+            </div>
+        </section>
+
+        <!-- Selección de Proveedor -->
+        <section class="filter-section" id="filter-section" style="display:none; opacity: 0; transition: opacity 0.5s;">
+            <div class="filter-content">
+                <h2>Seleccione un Proveedor para analizar</h2>
+                <div class="select-wrapper">
+                    <select id="provider-select">
+                        <option value="">-- Elija un Proveedor --</option>
+                    </select>
+                </div>
+                <!-- Estadísticas rápidas -->
+                <div id="provider-stats" class="provider-stats"></div>
+            </div>
+        </section>
+
+        <!-- Tabla de Resultados -->
+        <section class="results-section" id="results-section" style="display:none;">
+            <div class="table-container">
+                <table id="results-table">
+                    <thead>
+                        <!-- Se llena dinámicamente -->
+                    </thead>
+                    <tbody>
+                        <!-- Se llena dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
