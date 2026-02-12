@@ -2,8 +2,8 @@
 const STATE = {
     providers: null, // Map<cod_alfa, {id, name, desc}>
     stock: null,     // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }>
-    sales: null,     // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }>
-    sales: null,     // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }>
+    sales: null,     // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }> (Processed)
+    rawSales: [],    // Array<{code, area, qty, date}> (Raw Data)
     pending: null,   // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }> NEW
     abc: null,       // Map<cod_alfa, 'A'|'B'|'C'>
     salesDateRange: { min: null, max: null, months: 1 },
@@ -46,7 +46,9 @@ const dom = {
     historyMonths: document.getElementById('historyMonths'),
     projectionMonths: document.getElementById('projectionMonths'),
     providerStats: document.getElementById('provider-stats'),
-    dateRangeInfo: document.getElementById('date-range-info')
+    dateRangeInfo: document.getElementById('date-range-info'),
+    dateFrom: document.getElementById('date-from'),
+    dateTo: document.getElementById('date-to')
 };
 
 // --- Inicialización ---
@@ -57,6 +59,8 @@ setupDragDrop(dom.dropPending, dom.filePending, handlePendingFile); // NEW
 
 dom.providerSelect.addEventListener('change', renderTable);
 dom.projectionMonths.addEventListener('change', renderTable);
+dom.dateFrom.addEventListener('change', filterAndProcessSales);
+dom.dateTo.addEventListener('change', filterAndProcessSales);
 document.getElementById('btn-export').addEventListener('click', exportToExcel);
 
 // --- Utils ---
@@ -224,8 +228,7 @@ function handleSalesFile(file) {
     Papa.parse(file, {
         header: true, skipEmptyLines: true,
         complete: (results) => {
-            STATE.sales = {};
-            let count = 0;
+            STATE.rawSales = [];
             let minTimestamp = Infinity;
             let maxTimestamp = -Infinity;
 
@@ -237,8 +240,9 @@ function handleSalesFile(file) {
                 if (isNaN(qty)) qty = 0;
 
                 const dateStr = row.fecha || row.FECHA;
+                let dateObj = null;
                 if (dateStr) {
-                    const dateObj = parseDate(dateStr);
+                    dateObj = parseDate(dateStr);
                     if (dateObj && !isNaN(dateObj.getTime())) {
                         const ts = dateObj.getTime();
                         if (ts < minTimestamp) minTimestamp = ts;
@@ -247,35 +251,71 @@ function handleSalesFile(file) {
                 }
 
                 if (code && area) {
-                    const zone = getZone(area);
-                    if (!STATE.sales[code]) STATE.sales[code] = { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
-                    STATE.sales[code][zone] += qty;
-                    count++;
+                    STATE.rawSales.push({ code, area, qty, date: dateObj });
                 }
             });
 
-            let months = 1;
+            // Set default date range inputs
             if (minTimestamp !== Infinity && maxTimestamp !== -Infinity) {
-                const diffTime = Math.abs(maxTimestamp - minTimestamp);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-                months = (diffDays / 30).toFixed(1);
-                dom.historyMonths.value = months;
-                const minDate = new Date(minTimestamp).toLocaleDateString();
-                const maxDate = new Date(maxTimestamp).toLocaleDateString();
-                dom.dateRangeInfo.textContent = `Rango detectado: ${minDate} - ${maxDate} (${diffDays} días)`;
-                STATE.salesDateRange = { min: minDate, max: maxDate, months: parseFloat(months) };
-            } else {
-                dom.dateRangeInfo.textContent = "No detectado. Base: 1 mes.";
-                dom.historyMonths.value = 1;
-                STATE.salesDateRange.months = 1;
+                dom.dateFrom.valueAsDate = new Date(minTimestamp);
+                dom.dateTo.valueAsDate = new Date(maxTimestamp);
             }
 
-            updateStatus(dom.statusSales, `✅ Cargado (${count} ventas)`, true);
-            calculateABC();
-            checkAppReady();
+            updateStatus(dom.statusSales, `✅ Cargado (${STATE.rawSales.length} regs)`, true);
+            filterAndProcessSales(); // Initial process
         },
         error: (err) => { console.error(err); updateStatus(dom.statusSales, "❌ Error CSV"); }
     });
+}
+
+function filterAndProcessSales() {
+    if (!STATE.rawSales || STATE.rawSales.length === 0) return;
+
+    const fromDate = dom.dateFrom.valueAsDate;
+    const toDate = dom.dateTo.valueAsDate;
+
+    if (!fromDate || !toDate) return;
+
+    // Validate range
+    if (fromDate > toDate) {
+        alert("La fecha 'Desde' no puede ser mayor que 'Hasta'");
+        return;
+    }
+
+    // Filter and Aggregate
+    STATE.sales = {};
+    let count = 0;
+
+    STATE.rawSales.forEach(item => {
+        if (item.date && item.date >= fromDate && item.date <= toDate) {
+            const zone = getZone(item.area);
+            if (!STATE.sales[item.code]) STATE.sales[item.code] = { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+            STATE.sales[item.code][zone] += item.qty;
+            count++;
+        }
+    });
+
+    // Calculate Months in Range
+    const diffTime = Math.abs(toDate - fromDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    const months = (diffDays / 30).toFixed(1); // 1 month = 30 days approx
+
+    dom.historyMonths.value = months;
+    STATE.salesDateRange = {
+        min: fromDate.toLocaleDateString(),
+        max: toDate.toLocaleDateString(),
+        months: parseFloat(months)
+    };
+
+    console.log(`Filtered Sales: ${count} transactions. Range: ${months} months.`);
+
+    calculateABC();
+
+    if (STATE.appReady) {
+        renderTable();
+    } else {
+        checkAppReady();
+    }
 }
 
 // NEW: Handle Pending

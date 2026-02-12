@@ -21,16 +21,23 @@
 
         <!-- Configuración Global -->
         <section class="config-panel">
+
             <div class="config-item">
-                <label for="historyMonths">Meses Historia (Calc):</label>
-                <input type="number" id="historyMonths" value="0" readonly
-                    style="background-color: #e2e8f0; color: #64748b;">
-                <small id="date-range-info"
-                    style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 4px;"></small>
+                <label for="date-from">Desde:</label>
+                <input type="date" id="date-from">
             </div>
             <div class="config-item">
-                <label for="projectionMonths">Meses Proyección:</label>
-                <input type="number" id="projectionMonths" value="2" min="1">
+                <label for="date-to">Hasta:</label>
+                <input type="date" id="date-to">
+            </div>
+            <div class="config-item">
+                <label for="historyMonths">Meses Calc:</label>
+                <input type="number" id="historyMonths" value="0" readonly
+                    style="background-color: #e2e8f0; color: #64748b; width: 60px;">
+            </div>
+            <div class="config-item">
+                <label for="projectionMonths">Meses Proy:</label>
+                <input type="number" id="projectionMonths" value="2" min="1" style="width: 60px;">
             </div>
         </section>
 
