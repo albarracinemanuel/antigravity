@@ -3,7 +3,9 @@ const STATE = {
     providers: null, // Map<cod_alfa, {id, name, desc}>
     stock: null,     // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }>
     sales: null,     // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }>
+    sales: null,     // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }>
     pending: null,   // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }> NEW
+    abc: null,       // Map<cod_alfa, 'A'|'B'|'C'>
     salesDateRange: { min: null, max: null, months: 1 },
     providersList: new Set(),
     appReady: false
@@ -131,6 +133,13 @@ function checkAppReady() {
         topOption.textContent = "*** 200 MAS VENDIDOS (GLOBAL) ***";
         topOption.style.fontWeight = "bold";
         dom.providerSelect.appendChild(topOption);
+
+        const highRotationOption = document.createElement('option');
+        highRotationOption.value = "HIGH_ROTATION";
+        highRotationOption.textContent = "🔥 ALTA ROTACIÓN (CATEGORÍA A)";
+        highRotationOption.style.fontWeight = "bold";
+        highRotationOption.style.color = "#d97706";
+        dom.providerSelect.appendChild(highRotationOption);
 
         if (sortedActiveProviders.length === 0) {
             const noSalesOption = document.createElement('option');
@@ -262,6 +271,7 @@ function handleSalesFile(file) {
             }
 
             updateStatus(dom.statusSales, `✅ Cargado (${count} ventas)`, true);
+            calculateABC();
             checkAppReady();
         },
         error: (err) => { console.error(err); updateStatus(dom.statusSales, "❌ Error CSV"); }
@@ -297,6 +307,40 @@ function handlePendingFile(file) {
     });
 }
 
+function calculateABC() {
+    if (!STATE.sales) return;
+
+    // 1. Agrupar ventas totales por producto
+    const productSales = [];
+    Object.entries(STATE.sales).forEach(([code, data]) => {
+        const total = (data["NOA"] || 0) + (data["BUENOS AIRES"] || 0) + (data["CORDOBA"] || 0) + (data["OTROS"] || 0);
+        if (total > 0) {
+            productSales.push({ code, total });
+        }
+    });
+
+    // 2. Ordenar de mayor a menor
+    productSales.sort((a, b) => b.total - a.total);
+
+    // 3. Calcular total general
+    const totalGrand = productSales.reduce((sum, item) => sum + item.total, 0);
+
+    // 4. Asignar categorías (Pareto 80/15/5)
+    let accumulated = 0;
+    STATE.abc = {};
+
+    productSales.forEach(item => {
+        accumulated += item.total;
+        const percentage = (accumulated / totalGrand) * 100;
+
+        let category = 'C';
+        if (percentage <= 80) category = 'A';
+        else if (percentage <= 95) category = 'B';
+
+        STATE.abc[item.code] = category;
+    });
+}
+
 // --- Render Logic ---
 function renderTable() {
     if (!STATE.appReady) return;
@@ -311,10 +355,13 @@ function renderTable() {
     }
 
     const isTop200 = selectedValue === "TOP200";
+    const isHighRotation = selectedValue === "HIGH_ROTATION";
     let productsList = [];
 
     if (isTop200) {
         productsList = Object.keys(STATE.providers);
+    } else if (isHighRotation) {
+        productsList = Object.keys(STATE.providers).filter(code => STATE.abc && STATE.abc[code] === 'A');
     } else {
         productsList = Object.entries(STATE.providers)
             .filter(([code, data]) => data.name === selectedValue)
@@ -336,7 +383,10 @@ function renderTable() {
     let displayList = rankedProducts;
     if (isTop200) {
         displayList = rankedProducts.slice(0, 200);
+        displayList = rankedProducts.slice(0, 200);
         dom.providerStats.textContent = `Mostrando los 200 productos más vendidos globalmente (Base: ${histMonths} meses)`;
+    } else if (isHighRotation) {
+        dom.providerStats.textContent = `Mostrando ${displayList.length} productos de Alta Rotación (Categoría A) (Base: ${histMonths} meses)`;
     } else {
         dom.providerStats.textContent = `Mostrando ${displayList.length} productos de ${selectedValue} (Base: ${histMonths} meses)`;
     }
@@ -348,14 +398,15 @@ function renderTable() {
         <tr>
             <th>Producto</th>
             <th>Descripción</th>
+            <th class="col-category">Cat.</th>
     `;
-    if (isTop200) headerHTML += `<th>Proveedor</th>`;
+    if (isTop200 || isHighRotation) headerHTML += `<th>Proveedor</th>`;
 
     const zones = ["NOA", "BUENOS AIRES", "CORDOBA"];
     zones.forEach(z => {
         headerHTML += `<th colspan="5" class="group-header">${z}</th>`; // colspan 5
     });
-    headerHTML += `</tr><tr><th></th><th></th>${isTop200 ? '<th></th>' : ''}`;
+    headerHTML += `</tr><tr><th></th><th></th><th></th>${(isTop200 || isHighRotation) ? '<th></th>' : ''}`;
 
     zones.forEach(z => {
         headerHTML += `
@@ -377,15 +428,22 @@ function renderTable() {
         const stockData = STATE.stock[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 };
         const salesData = STATE.sales[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 };
         const pendingData = STATE.pending[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 }; // NEW
+        const category = (STATE.abc && STATE.abc[code]) ? STATE.abc[code] : '-';
 
         const tr = document.createElement('tr');
+
+        // Add Layout Class
+        if (category === 'A') tr.classList.add('categoria-a');
+        else if (category === 'B') tr.classList.add('categoria-b');
+        else if (category === 'C') tr.classList.add('categoria-c');
 
         let rowHTML = `
             <td>${code}</td>
             <td>${prodData.desc}</td>
+            <td class="col-category">${category}</td>
         `;
 
-        if (isTop200) rowHTML += `<td style="font-size: 0.8em; color: #64748b;">${prodData.name}</td>`;
+        if (isTop200 || isHighRotation) rowHTML += `<td style="font-size: 0.8em; color: #64748b;">${prodData.name}</td>`;
 
         zones.forEach(z => {
             const stock = stockData[z] || 0;
@@ -401,14 +459,9 @@ function renderTable() {
             suggested = Math.ceil(suggested);
 
             // Color Logic: Stock + Pending vs Estimates
-            const totalAvailable = stock + pending;
+            // REMOVED: Red/Green logic based on user request.
+            // Keeping stockClass for potential future use or just structure.
             let stockClass = "val-stock";
-
-            // Red: (Stock + Pending) < (Average * ProjectionMonths) (User: "2 o x")
-            // Green: (Stock + Pending) > (Average * 6)
-
-            if (totalAvailable < (monthlyAvg * projMonths)) stockClass += " stock-critical";
-            else if (totalAvailable > (monthlyAvg * 6)) stockClass += " stock-excess";
 
             // Highlight suggested
             let suggStyle = "";
