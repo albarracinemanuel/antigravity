@@ -48,7 +48,17 @@ const dom = {
     providerStats: document.getElementById('provider-stats'),
     dateRangeInfo: document.getElementById('date-range-info'),
     dateFrom: document.getElementById('date-from'),
-    dateTo: document.getElementById('date-to')
+    dateTo: document.getElementById('date-to'),
+    // Efficient Mode Elements
+    tabsContainer: document.getElementById('tabs-container'),
+    resultsSectionGeneral: document.getElementById('results-section'),
+    resultsSectionEfficient: document.getElementById('results-efficient-section'),
+    resultsTableEfficient: document.getElementById('results-table-efficient'),
+    resultsTableEfficient: document.getElementById('results-table-efficient'),
+    efficientLT: document.getElementById('efficient-lt'),
+    btnRecalcEfficient: document.getElementById('btn-recalc-efficient'),
+    btnExportEfficient: document.getElementById('btn-export-efficient'),
+    tabs: document.querySelectorAll('.tab-btn')
 };
 
 // --- Inicialización ---
@@ -57,11 +67,30 @@ setupDragDrop(dom.dropStock, dom.fileStock, handleStockFile);
 setupDragDrop(dom.dropSales, dom.fileSales, handleSalesFile);
 setupDragDrop(dom.dropPending, dom.filePending, handlePendingFile); // NEW
 
-dom.providerSelect.addEventListener('change', renderTable);
+dom.providerSelect.addEventListener('change', () => { renderTable(); renderEfficientTable(); });
 dom.projectionMonths.addEventListener('change', renderTable);
 dom.dateFrom.addEventListener('change', filterAndProcessSales);
 dom.dateTo.addEventListener('change', filterAndProcessSales);
 document.getElementById('btn-export').addEventListener('click', exportToExcel);
+
+// Efficient Mode Listeners
+dom.tabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+        dom.tabs.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        if (tab === 'general') {
+            dom.resultsSectionGeneral.style.display = 'block';
+            dom.resultsSectionEfficient.style.display = 'none';
+        } else {
+            dom.resultsSectionGeneral.style.display = 'none';
+            dom.resultsSectionEfficient.style.display = 'block';
+            renderEfficientTable();
+        }
+    });
+});
+dom.btnRecalcEfficient.addEventListener('click', renderEfficientTable);
+dom.btnExportEfficient.addEventListener('click', exportToExcelEfficient);
 
 // --- Utils ---
 function normalizeText(text) {
@@ -161,6 +190,7 @@ function checkAppReady() {
 
         dom.filterSection.style.display = 'block';
         setTimeout(() => dom.filterSection.style.opacity = '1', 10);
+        dom.tabsContainer.style.display = 'flex'; // Show tabs
         dom.providerStats.textContent = `Lista (Activos): ${sortedActiveProviders.length} proveedores.`;
     }
 }
@@ -313,6 +343,7 @@ function filterAndProcessSales() {
 
     if (STATE.appReady) {
         renderTable();
+        renderEfficientTable();
     } else {
         checkAppReady();
     }
@@ -541,4 +572,174 @@ function exportToExcel() {
 
     // Write file
     XLSX.writeFile(wb, filename);
+}
+
+// --- Efficient Mode Logic ---
+
+function renderEfficientTable() {
+    if (!STATE.appReady) return;
+
+    const selectedProvider = dom.providerSelect.value;
+    if (!selectedProvider || selectedProvider === "TOP200" || selectedProvider === "HIGH_ROTATION") {
+        dom.resultsTableEfficient.innerHTML = `<tbody><tr><td>Seleccione un único proveedor para el análisis eficiente. (Valor: '${selectedProvider}')</td></tr></tbody>`;
+        return;
+    }
+
+    // Config
+    const leadTime = parseInt(dom.efficientLT.value) || 20;
+
+    // Use Global Sales Data (Already filtered by Date Range)
+    // STATE.salesDateRange has { min, max, months }
+    const monthsAnalysis = STATE.salesDateRange.months || 1;
+    const daysAnalysis = Math.max(1, Math.round(monthsAnalysis * 30));
+
+
+    // Get products for provider
+    const products = Object.entries(STATE.providers)
+        .filter(([code, data]) => data.name === selectedProvider)
+        .map(([code, data]) => code);
+
+    // Analyze Provider Trigger
+    let providerTrigger = false;
+    const analysisData = [];
+
+    products.forEach(code => {
+        const prodData = STATE.providers[code];
+        const stockData = STATE.stock[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 };
+        const totalStock = (stockData["NOA"] || 0) + (stockData["BUENOS AIRES"] || 0) + (stockData["CORDOBA"] || 0);
+
+        const category = (STATE.abc && STATE.abc[code]) ? STATE.abc[code] : 'C'; // Default C
+
+        const salesData = STATE.sales[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+        const salesQty = (salesData["NOA"] || 0) + (salesData["BUENOS AIRES"] || 0) + (salesData["CORDOBA"] || 0) + (salesData["OTROS"] || 0);
+
+        const dailyDemand = salesQty / daysAnalysis;
+        const monthlyDemand = dailyDemand * 30;
+        const demandLT = dailyDemand * leadTime;
+
+        // Logic by Category
+        let rop = 0;
+        let targetStock = 0;
+        let isRisk = false;
+
+        if (category === 'A') {
+            rop = demandLT * 1.10;
+            targetStock = monthlyDemand * 2;
+            // Trigger check
+            if (totalStock <= rop) providerTrigger = true;
+            // Critical Risk check
+            const daysStock = dailyDemand > 0 ? totalStock / dailyDemand : 0;
+            if (daysStock < (leadTime - 5)) isRisk = true;
+
+        } else if (category === 'B') {
+            rop = demandLT * 1.10;
+            targetStock = monthlyDemand * 1.5;
+        } else {
+            // C: Bajo pedido
+            targetStock = 0; // Se calcula dinámicamente si hay pedido
+        }
+
+        analysisData.push({
+            code,
+            desc: prodData.desc,
+            category,
+            stock: totalStock,
+            salesQty,
+            dailyDemand,
+            rop,
+            targetStock,
+            isRisk
+        });
+    });
+
+    // Calculate Suggested
+    analysisData.forEach(item => {
+        item.suggested = 0;
+        if (providerTrigger) {
+            if (item.category === 'A' || item.category === 'B') {
+                if (item.stock < item.targetStock) {
+                    item.suggested = Math.ceil(item.targetStock - item.stock);
+                }
+            } else if (item.category === 'C') {
+                // Reponer solo si hubo ventas recientes (modelo simple: reponer lo vendido si no hay stock)
+                // O según regla: "Si hubo ventas -> reponer únicamente lo vendido"
+                // Asumimos que si stock < ventasQty, reponemos la diferencia
+                // Para simplificar según requerimiento: "Si hubo ventas -> reponer únicamente lo vendido" -> Target = Ventas
+                if (item.salesQty > 0) {
+                    const gap = item.salesQty - item.stock;
+                    if (gap > 0) item.suggested = Math.ceil(gap);
+                }
+            }
+        }
+    });
+
+    // Render
+    // Sort: A risk -> A -> B -> C
+    analysisData.sort((a, b) => {
+        if (a.category === 'A' && b.category !== 'A') return -1;
+        if (b.category === 'A' && a.category !== 'A') return 1;
+        if (a.category === 'A' && b.category === 'A') return (a.stock / a.dailyDemand) - (b.stock / b.dailyDemand); // Menor días stock primero
+        return 0;
+    });
+
+    const thead = dom.resultsTableEfficient.querySelector('thead');
+    const tbody = dom.resultsTableEfficient.querySelector('tbody');
+
+    const minDateInfo = STATE.salesDateRange.min || "?";
+    const maxDateInfo = STATE.salesDateRange.max || "?";
+
+    thead.innerHTML = `
+        <tr>
+            <th colspan="9" style="background:#f1f5f9; color:#475569; font-size:0.9em; text-align:left; border:none;">
+                Periodo Analizado: ${minDateInfo} - ${maxDateInfo} (${daysAnalysis} días aprox)
+            </th>
+        </tr>
+        <tr>
+            <th>Cat</th>
+            <th>Producto</th>
+            <th>Descripción</th>
+            <th>Stock</th>
+            <th>Ventas</th>
+            <th>Días Stock</th>
+            <th>ROP</th>
+            <th>Meta</th>
+            <th>Sugerido</th>
+        </tr>
+    `;
+
+    tbody.innerHTML = "";
+
+    analysisData.forEach(item => {
+        const daysStock = item.dailyDemand > 0 ? (item.stock / item.dailyDemand).toFixed(1) : "∞";
+        const tr = document.createElement('tr');
+
+        // Style row based on cat
+        if (item.category === 'A') tr.classList.add('categoria-a');
+        else if (item.category === 'B') tr.classList.add('categoria-b');
+        else if (item.category === 'C') tr.classList.add('categoria-c');
+
+        const riskBadge = item.isRisk ? '<span class="alert-risk">⚠ RIESGO</span>' : '';
+        const suggStyle = item.suggested > 0 ? "font-weight:bold; color: #2563eb; background:#f0f9ff" : "";
+
+        tr.innerHTML = `
+            <td class="col-category">${item.category} ${riskBadge}</td>
+            <td>${item.code}</td>
+            <td>${item.desc}</td>
+            <td>${item.stock}</td>
+            <td>${item.salesQty}</td>
+            <td>${daysStock}</td>
+            <td>${Math.ceil(item.rop)}</td>
+            <td>${Math.ceil(item.targetStock)}</td>
+            <td style="${suggStyle}">${item.suggested}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function exportToExcelEfficient() {
+    const table = document.getElementById('results-table-efficient');
+    if (!table) return;
+    const wb = XLSX.utils.table_to_book(table, { sheet: "Eficiencia" });
+    const today = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `analisis_eficiente_${today}.xlsx`);
 }
