@@ -2,60 +2,57 @@
 
 Herramienta web para la consolidación y análisis de stock, ventas y mercadería pendiente por zonas geográficas (NOA, Buenos Aires, Córdoba).
 
-## Características
+## Características Principales
 
-- **Carga de Datos**: Permite cargar 4 archivos clave:
-  1.  **Proveedores** (.xls/.xlsx): Base de datos de productos y proveedores.
-  2.  **Stock del Día** (.csv): Reporte de stock actual por depósito.
-  3.  **Ventas Planas** (.csv): Histórico de ventas.
-  4.  **Mercadería Pendiente** (.csv): Productos en tránsito o pendientes de recepción.
-
-- **Análisis Automático**:
-  - Clasificación automática de zonas (NOA, Buenos Aires, Córdoba).
-  - Cálculo de ventas promedio mensuales.
-  - Proyección de stock necesario.
-  - **Sugerencia de Compra**: Fórmula inteligente que considera ventas estimadas, stock actual y mercadería pendiente.
-
-- **Filtrado Exclusivo**:
-  - Análisis por proveedor específico.
-  - Visualización del "Top 200" productos más vendidos globalmente.
-
-- **Exportación**:
-  - **Exportar a Excel**: Descarga la tabla de análisis resultante en formato `.xlsx` para su uso offline.
+*   **Carga de Datos**: Soporte para archivos de Proveedores (.xls/.xlsx), Stock, Ventas y Pendientes (.csv).
+*   **Análisis Dinámico**: Clasificación por zonas y cálculo automático de promedios y proyecciones.
+*   **Clasificación ABC (Pareto)**:
+    *   Clasifica los productos en **A (80%)**, **B (15%)** y **C (5%)** según su volumen de ventas.
+    *   Indicadores visuales sutiles (Azul, Amarillo, Gris) para facilitar la lectura.
+*   **Filtro de Fechas**:
+    *   Permite seleccionar un rango de fechas específico para el análisis de ventas.
+    *   Recalcula automáticamente promedios, categorías y sugerencias al cambiar el rango.
+*   **Filtros Avanzados**:
+    *   Por proveedor específico.
+    *   **Alta Rotación**: Visualización exclusiva de productos de Categoría A.
+    *   **Top 200**: Los 200 productos más vendidos.
+*   **Exportación a Excel**: Descarga la tabla completa, incluyendo la nueva columna de Categoría, respetando los filtros y fechas seleccionadas.
 
 ## Instrucciones de Uso
 
-1.  Abra el archivo `index.html` en su navegador web (Chrome, Edge, Firefox).
-2.  **Cargue los archivos requeridos** en las zonas correspondientes:
-    - Arrastre y suelte los archivos o haga clic en los botones de carga.
-    - Asegúrese de que los archivos CSV tengan los encabezados correctos (ver abajo).
-3.  Una vez cargados los 4 archivos, aparecerá el selector de proveedores.
-4.  **Seleccione un proveedor** o la opción "Top 200".
-5.  Ajuste los "Meses de Proyección" si es necesario.
-6.  Analice la tabla de resultados:
-    - **Stock**: Rojo si es crítico, Naranja si hay exceso.
-    - **Sug. (Sugerido)**: Cantidad recomendada a comprar (Resaltado en azul).
-7.  **Exportar**: Haga clic en el botón verde "📊 Exportar a Excel" para descargar el reporte visualizado.
+1.  **Carga de Archivos**:
+    *   Arrastre o seleccione los 4 archivos requeridos (Proveedores, Stock, Ventas, Pendientes).
+    *   El sistema procesará automáticamente la información.
+
+2.  **Configuración de Análisis**:
+    *   **Fechas**: Verifique el rango "Desde" y "Hasta". Por defecto selecciona todo el historial disponible. Modifíquelo para analizar períodos específicos (ej: último mes, temporada anterior).
+    *   **Meses Proyección**: Defina cuántos meses de stock desea cubrir (por defecto: 2).
+
+3.  **Visualización**:
+    *   Seleccione un Proveedor, "Top 200" o "**🔥 ALTA ROTACIÓN (CATEGORÍA A)**".
+    *   La tabla mostrará:
+        *   **Datos del Producto**: Código, Descripción y Categoría (A, B, C).
+        *   **Datos por Zona**: Stock actual, Pendiente, Ventas (en el período seleccionado), Estimación de venta futura y **Sugerido de Compra**.
+
+4.  **Interpretación de Resultados**:
+    *   **Filas**:
+        *   <span style="background-color: #eef5ff">Azul Claro</span>: Categoría A (Alta Rotación).
+        *   <span style="background-color: #fff9e6">Amarillo Claro</span>: Categoría B (Rotación Media).
+        *   <span style="background-color: #f5f5f5">Gris Claro</span>: Categoría C (Baja Rotación).
+    *   **Sugerido**: Cantidad resaltada en azul indica una oportunidad de compra, calculada como: `(Venta Promedio * Meses Proy) - (Stock + Pendiente)`.
+
+5.  **Exportación**: use el botón "📊 Exportar a Excel" para guardar el análisis actual.
 
 ## Requisitos de Archivos
 
 ### 1. Proveedores (.xls / .xlsx)
-Columnas necesarias:
-- `cod_alfa`: Código del producto.
-- `proveedor` (o `ult_provee`): Nombre del proveedor.
-- `detalle`: Descripción del producto.
+*   Columnas: `cod_alfa`, `proveedor` (o `ult_provee`), `detalle`.
 
 ### 2. Stock, Ventas y Pendientes (.csv)
-Deben ser archivos delimitados por comas o punto y coma.
-Columnas necesarias:
-- `cod_alfa`: Código del producto.
-- `nom_area`: Nombre del depósito o sucursal (para determinar la zona).
-- `cantidad` (Ventas), `disponible` (Stock) o `pendiente` (Pendientes).
-- `fecha` (Solo para Ventas): Para calcular el rango de meses analizado.
+*   **Ventas**: `cod_alfa`, `nom_area`, `cantidad`, `fecha`.
+*   **Stock**: `cod_alfa`, `nom_area`, `disponible`.
+*   **Pendientes**: `cod_alfa`, `nom_area`, `pendiente`.
 
 ## Tecnologías
-
-- HTML5 / CSS3
-- JavaScript (Vanilla)
-- [SheetJS](https://sheetjs.com/) (Lectura/Escritura Excel)
-- [PapaParse](https://www.papaparse.com/) (Lectura CSV)
+*   HTML5, CSS3, JavaScript (Vanilla).
+*   Librerías: SheetJS (Excel), PapaParse (CSV).
