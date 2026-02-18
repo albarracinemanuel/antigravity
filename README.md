@@ -34,14 +34,25 @@ Herramienta web para la consolidación y análisis de stock, ventas y mercaderí
         *   **Datos del Producto**: Código, Descripción y Categoría (A, B, C).
         *   **Datos por Zona**: Stock actual, Pendiente, Ventas (en el período seleccionado), Estimación de venta futura y **Sugerido de Compra**.
 
-4.  **Interpretación de Resultados**:
+4.  **Interpretación de Resultados ("General")**:
     *   **Filas**:
         *   <span style="background-color: #eef5ff">Azul Claro</span>: Categoría A (Alta Rotación).
         *   <span style="background-color: #fff9e6">Amarillo Claro</span>: Categoría B (Rotación Media).
         *   <span style="background-color: #f5f5f5">Gris Claro</span>: Categoría C (Baja Rotación).
     *   **Sugerido**: Cantidad resaltada en azul indica una oportunidad de compra, calculada como: `(Venta Promedio * Meses Proy) - (Stock + Pendiente)`.
 
-5.  **Exportación**: use el botón "📊 Exportar a Excel" para guardar el análisis actual.
+5.  **Análisis Eficiente (Pestaña "Eficiente")**:
+    *   Este modo se activa seleccionando un **único proveedor**.
+    *   **Objetivo**: Optimizar pedidos basándose en el "Punto de Pedido" (ROP) y Lead Time (tiempo de entrega).
+    *   **¿Cómo funciona el Sugerido?**:
+        *   El sistema verifica primero si **algún producto de Categoría A** está por debajo de su punto de reposición (ROP = Demanda en Lead Time + 10% seguridad).
+        *   **Si se activa la alerta (Trigger)**: Se calculan sugeridos para *todos* los productos del proveedor para aprovechar el pedido.
+        *   **Cálculos por Categoría**:
+            *   **A**: Busca cubrir 2 meses de venta. `Sugerido = (Venta Mensual * 2) - Stock`.
+            *   **B**: Busca cubrir 1.5 meses de venta. `Sugerido = (Venta Mensual * 1.5) - Stock`.
+            *   **C**: Reposición puntual. Solo sugiere si hubo ventas recientes y falta stock.
+
+6.  **Exportación**: use el botón "📊 Exportar a Excel" para guardar el análisis actual.
 
 ## Requisitos de Archivos
 
