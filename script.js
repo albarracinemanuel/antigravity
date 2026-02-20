@@ -54,8 +54,12 @@ const dom = {
     resultsSectionGeneral: document.getElementById('results-section'),
     resultsSectionEfficient: document.getElementById('results-efficient-section'),
     resultsTableEfficient: document.getElementById('results-table-efficient'),
-    resultsTableEfficient: document.getElementById('results-table-efficient'),
     efficientLT: document.getElementById('efficient-lt'),
+    efficientSegPct: document.getElementById('efficient-seg-pct'),
+    efficientCobA: document.getElementById('efficient-cob-a'),
+    efficientCobB: document.getElementById('efficient-cob-b'),
+    efficientCVentas: document.getElementById('efficient-c-ventas'),
+    efficientCDays: document.getElementById('efficient-c-days'),
     btnRecalcEfficient: document.getElementById('btn-recalc-efficient'),
     btnExportEfficient: document.getElementById('btn-export-efficient'),
     tabs: document.querySelectorAll('.tab-btn')
@@ -580,14 +584,28 @@ function renderEfficientTable() {
     if (!STATE.appReady) return;
 
     const selectedProvider = dom.providerSelect.value;
-    if (!selectedProvider || selectedProvider === "TOP200" || selectedProvider === "HIGH_ROTATION") {
+
+    // Validate if the selected value is one of our explicitly added dropdown options
+    let isValidProvider = false;
+    Array.from(dom.providerSelect.options).forEach(opt => {
+        if (opt.value === selectedProvider && selectedProvider !== "" && selectedProvider !== "TOP200" && selectedProvider !== "HIGH_ROTATION") {
+            isValidProvider = true;
+        }
+    });
+
+    if (!isValidProvider) {
         let displayVal = selectedProvider || 'Ninguno';
-        dom.resultsTableEfficient.innerHTML = `<tbody><tr><td>Seleccione un único proveedor válido para el análisis eficiente. (Valor actual no válido: '${displayVal}')</td></tr></tbody>`;
+        dom.resultsTableEfficient.innerHTML = `<tbody><tr><td>Seleccione un único proveedor para el análisis. La opción '${displayVal}' no corresponde a un proveedor individual cargado.</td></tr></tbody>`;
         return;
     }
 
-    // Config
-    const leadTime = parseInt(dom.efficientLT.value) || 20;
+    // Config (with safe unwrapping in case index.html was not reloaded)
+    const leadTime = dom.efficientLT ? (parseInt(dom.efficientLT.value) || 20) : 20;
+    const segPct = dom.efficientSegPct ? ((parseFloat(dom.efficientSegPct.value) || 10) / 100) : 0.10;
+    const cobA = dom.efficientCobA ? (parseFloat(dom.efficientCobA.value) || 2) : 2;
+    const cobB = dom.efficientCobB ? (parseFloat(dom.efficientCobB.value) || 1.5) : 1.5;
+    const checkCVentas = dom.efficientCVentas ? dom.efficientCVentas.checked : true;
+    const daysCVentas = dom.efficientCDays ? (parseInt(dom.efficientCDays.value) || 30) : 30;
 
     // Use Global Sales Data (Already filtered by Date Range)
     // STATE.salesDateRange has { min, max, months }
@@ -628,8 +646,8 @@ function renderEfficientTable() {
         let isRisk = false;
 
         if (category === 'A') {
-            rop = demandLT * 1.10;
-            targetStock = monthlyDemand * 2;
+            rop = demandLT * (1 + segPct);
+            targetStock = monthlyDemand * cobA;
             // Trigger check
             if (projectedStock <= rop) providerTrigger = true;
             // Critical Risk check
@@ -637,8 +655,8 @@ function renderEfficientTable() {
             if (daysStock < (leadTime - 5)) isRisk = true;
 
         } else if (category === 'B') {
-            rop = demandLT * 1.10;
-            targetStock = monthlyDemand * 1.5;
+            rop = demandLT * (1 + segPct);
+            targetStock = monthlyDemand * cobB;
         } else {
             // C: Bajo pedido
             targetStock = 0; // Se calcula dinámicamente si hay pedido
@@ -668,11 +686,23 @@ function renderEfficientTable() {
                     item.suggested = Math.ceil(item.targetStock - item.projectedStock);
                 }
             } else if (item.category === 'C') {
-                // Reponer solo si hubo ventas recientes (modelo simple: reponer lo vendido si no hay stock)
-                // O según regla: "Si hubo ventas -> reponer únicamente lo vendido"
-                // Asumimos que si stock < ventasQty, reponemos la diferencia
-                // Para simplificar según requerimiento: "Si hubo ventas -> reponer únicamente lo vendido" -> Target = Ventas
-                if (item.salesQty > 0) {
+                let shouldReplenishC = false;
+
+                if (checkCVentas) {
+                    const toDate = dom.dateTo.valueAsDate || new Date();
+                    const fromDateLimit = new Date(toDate.getTime() - daysCVentas * 24 * 60 * 60 * 1000);
+
+                    const hasRecentSales = STATE.rawSales.some(s =>
+                        s.code === item.code && s.date && s.date >= fromDateLimit && s.date <= toDate && s.qty > 0
+                    );
+
+                    if (hasRecentSales) shouldReplenishC = true;
+                } else if (item.salesQty > 0) {
+                    // Si se desmarca, funciona como antes: repone si hubo ventas globales en el periodo analizado
+                    shouldReplenishC = true;
+                }
+
+                if (shouldReplenishC && item.salesQty > 0) {
                     const gap = item.salesQty - item.projectedStock;
                     if (gap > 0) item.suggested = Math.ceil(gap);
                 }
@@ -705,14 +735,14 @@ function renderEfficientTable() {
             <th>Cat</th>
             <th>Producto</th>
             <th>Descripción</th>
-            <th>Stock Act.</th>
-            <th>Pend.</th>
-            <th>Stock Proy.</th>
-            <th>Ventas</th>
-            <th>Días Stock</th>
-            <th>ROP</th>
-            <th>Meta</th>
-            <th>Sugerido</th>
+            <th title="Stock actual disponible en sistema">Stock Act.</th>
+            <th title="Mercadería pendiente de recibir del proveedor">Pend.</th>
+            <th title="Stock proyectado considerando pendiente de recibir">Stock Proy.</th>
+            <th title="Ventas totales del período analizado">Ventas</th>
+            <th title="Cantidad estimada de días que el stock actual puede cubrir según la venta promedio">Días Stock</th>
+            <th title="Punto de Pedido. ROP = Demanda en Lead Time + % de seguridad">ROP</th>
+            <th title="Stock objetivo según meses de cobertura definidos para la categoría">Meta</th>
+            <th title="Cantidad recomendada a comprar = Meta − (Stock + Pendiente)">Sugerido</th>
         </tr>
     `;
 
