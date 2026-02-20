@@ -62,6 +62,16 @@ const dom = {
     efficientCDays: document.getElementById('efficient-c-days'),
     btnRecalcEfficient: document.getElementById('btn-recalc-efficient'),
     btnExportEfficient: document.getElementById('btn-export-efficient'),
+
+    // Global A Elements
+    resultsSectionGlobalA: document.getElementById('results-global-a-section'),
+    resultsTableGlobalA: document.getElementById('results-table-global-a'),
+    globalALt: document.getElementById('global-a-lt'),
+    globalASegPct: document.getElementById('global-a-seg-pct'),
+    globalASort: document.getElementById('global-a-sort'),
+    btnRecalcGlobalA: document.getElementById('btn-recalc-global-a'),
+    btnExportGlobalA: document.getElementById('btn-export-global-a'),
+
     tabs: document.querySelectorAll('.tab-btn')
 };
 
@@ -86,15 +96,26 @@ dom.tabs.forEach(btn => {
         if (tab === 'general') {
             dom.resultsSectionGeneral.style.display = 'block';
             dom.resultsSectionEfficient.style.display = 'none';
-        } else {
+            if (dom.resultsSectionGlobalA) dom.resultsSectionGlobalA.style.display = 'none';
+        } else if (tab === 'efficient') {
             dom.resultsSectionGeneral.style.display = 'none';
             dom.resultsSectionEfficient.style.display = 'block';
+            if (dom.resultsSectionGlobalA) dom.resultsSectionGlobalA.style.display = 'none';
             renderEfficientTable();
+        } else if (tab === 'global-a') {
+            dom.resultsSectionGeneral.style.display = 'none';
+            dom.resultsSectionEfficient.style.display = 'none';
+            if (dom.resultsSectionGlobalA) dom.resultsSectionGlobalA.style.display = 'block';
+            renderGlobalA();
         }
     });
 });
 dom.btnRecalcEfficient.addEventListener('click', renderEfficientTable);
 dom.btnExportEfficient.addEventListener('click', exportToExcelEfficient);
+
+if (dom.btnRecalcGlobalA) dom.btnRecalcGlobalA.addEventListener('click', renderGlobalA);
+if (dom.btnExportGlobalA) dom.btnExportGlobalA.addEventListener('click', exportToExcelGlobalA);
+if (dom.globalASort) dom.globalASort.addEventListener('change', renderGlobalA);
 
 // --- Utils ---
 function normalizeText(text) {
@@ -783,4 +804,143 @@ function exportToExcelEfficient() {
     const wb = XLSX.utils.table_to_book(table, { sheet: "Eficiencia" });
     const today = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, `analisis_eficiente_${today}.xlsx`);
+}
+
+// --- Global Category A Logic ---
+
+function renderGlobalA() {
+    if (!STATE.appReady || !dom.resultsTableGlobalA) return;
+
+    // Config
+    const leadTime = dom.globalALt ? (parseInt(dom.globalALt.value) || 20) : 20;
+    const segPct = dom.globalASegPct ? ((parseFloat(dom.globalASegPct.value) || 10) / 100) : 0.10;
+    const sortBy = dom.globalASort ? dom.globalASort.value : 'sales'; // 'sales' or 'days'
+
+    const monthsAnalysis = STATE.salesDateRange.months || 1;
+    const daysAnalysis = Math.max(1, Math.round(monthsAnalysis * 30));
+
+    // Get all Category A products
+    const productsA = Object.keys(STATE.providers).filter(code => STATE.abc && STATE.abc[code] === 'A');
+
+    const analysisData = [];
+
+    productsA.forEach(code => {
+        const prodData = STATE.providers[code];
+        const stockData = STATE.stock[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 };
+        const totalStock = (stockData["NOA"] || 0) + (stockData["BUENOS AIRES"] || 0) + (stockData["CORDOBA"] || 0);
+
+        const pendingData = STATE.pending[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+        const totalPending = (pendingData["NOA"] || 0) + (pendingData["BUENOS AIRES"] || 0) + (pendingData["CORDOBA"] || 0) + (pendingData["OTROS"] || 0);
+
+        const salesData = STATE.sales[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+        const salesQty = (salesData["NOA"] || 0) + (salesData["BUENOS AIRES"] || 0) + (salesData["CORDOBA"] || 0) + (salesData["OTROS"] || 0);
+
+        const dailyDemand = salesQty / daysAnalysis;
+        const demandLT = dailyDemand * leadTime;
+        const rop = demandLT * (1 + segPct);
+
+        const daysStock = dailyDemand > 0 ? totalStock / dailyDemand : Infinity;
+
+        // Estado Logic
+        let status = "OK";
+        let statusClass = "status-ok"; // For potential styling
+
+        if (daysStock <= leadTime) {
+            if (totalPending > 0) {
+                status = "PEDIR DESPACHO";
+                statusClass = "status-warning";
+            } else {
+                status = "COMPRAR URGENTE";
+                statusClass = "status-danger";
+            }
+        }
+
+        analysisData.push({
+            providerName: prodData.name,
+            code,
+            desc: prodData.desc,
+            stock: totalStock,
+            pending: totalPending,
+            salesQty,
+            dailyDemand,
+            demandLT,
+            rop,
+            daysStock,
+            status,
+            statusClass
+        });
+    });
+
+    // Sorting
+    analysisData.sort((a, b) => {
+        if (sortBy === 'sales') {
+            return b.salesQty - a.salesQty; // Mayor a menor
+        } else if (sortBy === 'days') {
+            return a.daysStock - b.daysStock; // Menor a mayor
+        }
+        return 0;
+    });
+
+    // Render
+    const thead = dom.resultsTableGlobalA.querySelector('thead');
+    const tbody = dom.resultsTableGlobalA.querySelector('tbody');
+
+    const minDateInfo = STATE.salesDateRange.min || "?";
+    const maxDateInfo = STATE.salesDateRange.max || "?";
+
+    thead.innerHTML = `
+        <tr>
+            <th colspan="7" style="background:#fef3c7; color:#b45309; font-size:0.9em; text-align:left; border:none;">
+                Control Global Categoría A | Período: ${minDateInfo} - ${maxDateInfo} (${daysAnalysis} días)
+            </th>
+        </tr>
+        <tr>
+            <th>Proveedor</th>
+            <th>Producto</th>
+            <th>Descripción</th>
+            <th title="Stock Disponible (Actual)">Stock Disp.</th>
+            <th title="Mercadería pendiente de recibir">Pend.</th>
+            <th title="Cantidad de días que el stock actual puede cubrir">Días Stock</th>
+            <th title="Punto de Pedido (Demanda LT + % Seg)">ROP</th>
+            <th>Estado</th>
+        </tr>
+    `;
+
+    tbody.innerHTML = "";
+
+    analysisData.forEach(item => {
+        const daysStockDisplay = item.daysStock === Infinity ? "∞" : item.daysStock.toFixed(1);
+        const dailyDemandDisplay = item.dailyDemand.toFixed(1);
+
+        const tr = document.createElement('tr');
+
+        let statusStyle = "font-weight: 500; font-size: 0.85em; padding: 4px 8px; border-radius: 4px; text-align: center;";
+        if (item.status === "OK") {
+            statusStyle += " background-color: #dcfce7; color: #166534;";
+        } else if (item.status === "PEDIR DESPACHO") {
+            statusStyle += " background-color: #fef08a; color: #854d0e;";
+        } else if (item.status === "COMPRAR URGENTE") {
+            statusStyle += " background-color: #fee2e2; color: #991b1b; font-weight: bold;";
+        }
+
+        tr.innerHTML = `
+            <td style="font-size: 0.8em; color: #64748b;">${item.providerName}</td>
+            <td style="font-weight: 500;">${item.code}</td>
+            <td style="font-size: 0.9em;">${item.desc}</td>
+            <td style="font-weight: bold;">${item.stock}</td>
+            <td>${item.pending}</td>
+            <td style="${item.daysStock <= leadTime ? 'color: #dc2626; font-weight: bold;' : ''}">${daysStockDisplay}</td>
+            <td style="font-weight: 500; color: #475569;">${Math.ceil(item.rop)}</td>
+            <td><div style="${statusStyle}">${item.status}</div></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function exportToExcelGlobalA() {
+    const table = document.getElementById('results-table-global-a');
+    if (!table) return;
+    const wb = XLSX.utils.table_to_book(table, { sheet: "Control Global A" });
+    const today = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `control_global_A_${today}.xlsx`);
 }

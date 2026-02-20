@@ -107,6 +107,8 @@
         <div class="tabs-container" style="display:none;" id="tabs-container">
             <button class="tab-btn active" data-tab="general">Análisis General</button>
             <button class="tab-btn" data-tab="efficient">Análisis Eficiente (A/B/C)</button>
+            <button class="tab-btn" data-tab="global-a"
+                style="background-color: #fef3c7; color: #b45309; border-color: #fde68a;">Control Global Cat A</button>
         </div>
 
         <!-- Tabla de Resultados General -->
@@ -147,9 +149,11 @@
                     <label>Cob. Cat B (meses):</label>
                     <input type="number" id="efficient-cob-b" value="1.5" step="0.1" style="width:60px" min="0">
                 </div>
-                <div class="config-item" style="display: flex; align-items: center; gap: 5px; flex-direction: row; margin-top: auto; margin-bottom: auto;">
+                <div class="config-item"
+                    style="display: flex; align-items: center; gap: 5px; flex-direction: row; margin-top: auto; margin-bottom: auto;">
                     <input type="checkbox" id="efficient-c-ventas" checked>
-                    <label for="efficient-c-ventas" style="margin: 0; font-size: 0.9em;">Cat C: Reponer solo con ventas en los últimos</label>
+                    <label for="efficient-c-ventas" style="margin: 0; font-size: 0.9em;">Cat C: Reponer solo con ventas
+                        en los últimos</label>
                     <input type="number" id="efficient-c-days" value="30" style="width:60px" min="0">
                     <label style="margin: 0; font-size: 0.9em;">días</label>
                 </div>
@@ -165,6 +169,49 @@
 
             <div class="table-container">
                 <table id="results-table-efficient">
+                    <thead>
+                        <!-- Se llena dinámicamente -->
+                    </thead>
+                    <tbody>
+                        <!-- Se llena dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Tabla de Control Global Categoria A -->
+        <section class="results-section" id="results-global-a-section" style="display:none;">
+            <!-- Config Global A -->
+            <div class="config-panel efficient-config" style="flex-wrap: wrap; gap: 15px;">
+                <div class="config-item">
+                    <label>Lead Time (Días):</label>
+                    <input type="number" id="global-a-lt" value="20" style="width:60px">
+                </div>
+                <div class="config-item">
+                    <label>% Seg. ROP:</label>
+                    <input type="number" id="global-a-seg-pct" value="10" style="width:60px" min="0" max="100">
+                </div>
+                <div class="config-item" style="margin-left: auto;">
+                    <label>Ordenar por:</label>
+                    <div class="select-wrapper" style="margin:0;">
+                        <select id="global-a-sort" style="width: auto; margin:0; padding: 6px 10px;">
+                            <option value="sales">Más vendido (Ventas del Período)</option>
+                            <option value="days">Menor Días de Stock</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="config-item">
+                    <button id="btn-recalc-global-a" class="btn-action">🔄 Recalcular</button>
+                </div>
+            </div>
+
+            <div class="actions-bar" style="text-align: right; margin-bottom: 10px;">
+                <button id="btn-export-global-a" class="btn-action" style="background-color: #10b981;">📊 Exportar
+                    Control Global</button>
+            </div>
+
+            <div class="table-container">
+                <table id="results-table-global-a">
                     <thead>
                         <!-- Se llena dinámicamente -->
                     </thead>
