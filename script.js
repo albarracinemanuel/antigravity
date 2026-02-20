@@ -581,7 +581,8 @@ function renderEfficientTable() {
 
     const selectedProvider = dom.providerSelect.value;
     if (!selectedProvider || selectedProvider === "TOP200" || selectedProvider === "HIGH_ROTATION") {
-        dom.resultsTableEfficient.innerHTML = `<tbody><tr><td>Seleccione un único proveedor para el análisis eficiente. (Valor: '${selectedProvider}')</td></tr></tbody>`;
+        let displayVal = selectedProvider || 'Ninguno';
+        dom.resultsTableEfficient.innerHTML = `<tbody><tr><td>Seleccione un único proveedor válido para el análisis eficiente. (Valor actual no válido: '${displayVal}')</td></tr></tbody>`;
         return;
     }
 
@@ -608,6 +609,10 @@ function renderEfficientTable() {
         const stockData = STATE.stock[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 };
         const totalStock = (stockData["NOA"] || 0) + (stockData["BUENOS AIRES"] || 0) + (stockData["CORDOBA"] || 0);
 
+        const pendingData = STATE.pending[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+        const totalPending = (pendingData["NOA"] || 0) + (pendingData["BUENOS AIRES"] || 0) + (pendingData["CORDOBA"] || 0) + (pendingData["OTROS"] || 0);
+        const projectedStock = totalStock + totalPending;
+
         const category = (STATE.abc && STATE.abc[code]) ? STATE.abc[code] : 'C'; // Default C
 
         const salesData = STATE.sales[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
@@ -626,7 +631,7 @@ function renderEfficientTable() {
             rop = demandLT * 1.10;
             targetStock = monthlyDemand * 2;
             // Trigger check
-            if (totalStock <= rop) providerTrigger = true;
+            if (projectedStock <= rop) providerTrigger = true;
             // Critical Risk check
             const daysStock = dailyDemand > 0 ? totalStock / dailyDemand : 0;
             if (daysStock < (leadTime - 5)) isRisk = true;
@@ -644,6 +649,8 @@ function renderEfficientTable() {
             desc: prodData.desc,
             category,
             stock: totalStock,
+            pending: totalPending,
+            projectedStock: projectedStock,
             salesQty,
             dailyDemand,
             rop,
@@ -657,8 +664,8 @@ function renderEfficientTable() {
         item.suggested = 0;
         if (providerTrigger) {
             if (item.category === 'A' || item.category === 'B') {
-                if (item.stock < item.targetStock) {
-                    item.suggested = Math.ceil(item.targetStock - item.stock);
+                if (item.projectedStock < item.targetStock) {
+                    item.suggested = Math.ceil(item.targetStock - item.projectedStock);
                 }
             } else if (item.category === 'C') {
                 // Reponer solo si hubo ventas recientes (modelo simple: reponer lo vendido si no hay stock)
@@ -666,7 +673,7 @@ function renderEfficientTable() {
                 // Asumimos que si stock < ventasQty, reponemos la diferencia
                 // Para simplificar según requerimiento: "Si hubo ventas -> reponer únicamente lo vendido" -> Target = Ventas
                 if (item.salesQty > 0) {
-                    const gap = item.salesQty - item.stock;
+                    const gap = item.salesQty - item.projectedStock;
                     if (gap > 0) item.suggested = Math.ceil(gap);
                 }
             }
@@ -690,7 +697,7 @@ function renderEfficientTable() {
 
     thead.innerHTML = `
         <tr>
-            <th colspan="9" style="background:#f1f5f9; color:#475569; font-size:0.9em; text-align:left; border:none;">
+            <th colspan="11" style="background:#f1f5f9; color:#475569; font-size:0.9em; text-align:left; border:none;">
                 Periodo Analizado: ${minDateInfo} - ${maxDateInfo} (${daysAnalysis} días aprox)
             </th>
         </tr>
@@ -698,7 +705,9 @@ function renderEfficientTable() {
             <th>Cat</th>
             <th>Producto</th>
             <th>Descripción</th>
-            <th>Stock</th>
+            <th>Stock Act.</th>
+            <th>Pend.</th>
+            <th>Stock Proy.</th>
             <th>Ventas</th>
             <th>Días Stock</th>
             <th>ROP</th>
@@ -726,6 +735,8 @@ function renderEfficientTable() {
             <td>${item.code}</td>
             <td>${item.desc}</td>
             <td>${item.stock}</td>
+            <td>${item.pending}</td>
+            <td>${item.projectedStock}</td>
             <td>${item.salesQty}</td>
             <td>${daysStock}</td>
             <td>${Math.ceil(item.rop)}</td>
