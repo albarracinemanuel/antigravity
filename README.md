@@ -1,4 +1,4 @@
-# Gestión de Stock por Zonas
+# Analisis de compra MyA
 
 Herramienta web para la consolidación y análisis de stock, ventas y mercadería pendiente por zonas geográficas (NOA, Buenos Aires, Córdoba).
 
