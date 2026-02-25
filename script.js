@@ -890,7 +890,7 @@ function renderGlobalA() {
 
     thead.innerHTML = `
         <tr>
-            <th colspan="7" style="background:#fef3c7; color:#b45309; font-size:0.9em; text-align:left; border:none;">
+            <th colspan="8" style="background:#fef3c7; color:#b45309; font-size:0.9em; text-align:left; border:none;">
                 Control Global Categoría A | Período: ${minDateInfo} - ${maxDateInfo} (${daysAnalysis} días)
             </th>
         </tr>
@@ -900,6 +900,7 @@ function renderGlobalA() {
             <th>Descripción</th>
             <th title="Stock Disponible (Actual)">Stock Disp.</th>
             <th title="Mercadería pendiente de recibir">Pend.</th>
+            <th title="Ventas en el período seleccionado">Ventas</th>
             <th title="Cantidad de días que el stock actual puede cubrir">Días Stock</th>
             <th title="Punto de Pedido (Demanda LT + % Seg)">ROP</th>
             <th>Estado</th>
@@ -929,6 +930,7 @@ function renderGlobalA() {
             <td style="font-size: 0.9em;">${item.desc}</td>
             <td style="font-weight: bold;">${item.stock}</td>
             <td>${item.pending}</td>
+            <td class="val-sales">${item.salesQty}</td>
             <td style="${item.daysStock <= leadTime ? 'color: #dc2626; font-weight: bold;' : ''}">${daysStockDisplay}</td>
             <td style="font-weight: 500; color: #475569;">${Math.ceil(item.rop)}</td>
             <td><div style="${statusStyle}">${item.status}</div></td>
