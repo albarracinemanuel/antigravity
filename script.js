@@ -49,6 +49,7 @@ const dom = {
     dateRangeInfo: document.getElementById('date-range-info'),
     dateFrom: document.getElementById('date-from'),
     dateTo: document.getElementById('date-to'),
+    generalViewMode: document.getElementById('general-view-mode'), // NEW
     // Efficient Mode Elements
     tabsContainer: document.getElementById('tabs-container'),
     resultsSectionGeneral: document.getElementById('results-section'),
@@ -86,6 +87,7 @@ dom.projectionMonths.addEventListener('change', renderTable);
 dom.dateFrom.addEventListener('change', filterAndProcessSales);
 dom.dateTo.addEventListener('change', filterAndProcessSales);
 document.getElementById('btn-export').addEventListener('click', exportToExcel);
+dom.generalViewMode.addEventListener('change', renderTable); // NEW
 
 // Efficient Mode Listeners
 dom.tabs.forEach(btn => {
@@ -498,21 +500,37 @@ function renderTable() {
     `;
     if (isTop200 || isHighRotation) headerHTML += `<th>Proveedor</th>`;
 
-    const zones = ["NOA", "BUENOS AIRES", "CORDOBA"];
-    zones.forEach(z => {
-        headerHTML += `<th colspan="5" class="group-header">${z}</th>`; // colspan 5
-    });
-    headerHTML += `</tr><tr><th></th><th></th><th></th>${(isTop200 || isHighRotation) ? '<th></th>' : ''}`;
+    const viewMode = dom.generalViewMode ? dom.generalViewMode.value : 'zones';
 
-    zones.forEach(z => {
+    const zones = ["NOA", "BUENOS AIRES", "CORDOBA"];
+
+    if (viewMode === 'zones') {
+        zones.forEach(z => {
+            headerHTML += `<th colspan="5" class="group-header">${z}</th>`; // colspan 5
+        });
+        headerHTML += `</tr><tr><th></th><th></th><th></th>${(isTop200 || isHighRotation) ? '<th></th>' : ''}`;
+
+        zones.forEach(z => {
+            headerHTML += `
+                <th class="col-data" style="font-size:0.85em">Stock</th>
+                <th style="font-size:0.85em">Pend.</th>
+                <th style="font-size:0.85em">Ventas</th>
+                <th style="font-size:0.85em">Estim.</th>
+                <th style="font-size:0.85em; background:#f0f9ff">Sug.</th>
+            `;
+        });
+    } else {
+        headerHTML += `<th colspan="5" class="group-header" style="background-color: #3b82f6; color: white;">TOTAL EMPRESA CONSOLIDADA</th>`;
+        headerHTML += `</tr><tr><th></th><th></th><th></th>${(isTop200 || isHighRotation) ? '<th></th>' : ''}`;
         headerHTML += `
-            <th class="col-data" style="font-size:0.85em">Stock</th>
-            <th style="font-size:0.85em">Pend.</th>
-            <th style="font-size:0.85em">Ventas</th>
-            <th style="font-size:0.85em">Estim.</th>
-            <th style="font-size:0.85em; background:#f0f9ff">Sug.</th>
+            <th class="col-data" style="font-size:0.85em">Stock Total</th>
+            <th style="font-size:0.85em">Pend. Total</th>
+            <th style="font-size:0.85em">Ventas Totales</th>
+            <th style="font-size:0.85em">Estim. Total</th>
+            <th style="font-size:0.85em; background:#f0f9ff">Sug. Total</th>
         `;
-    });
+    }
+
     headerHTML += `</tr>`;
     thead.innerHTML = headerHTML;
 
@@ -541,39 +559,67 @@ function renderTable() {
 
         if (isTop200 || isHighRotation) rowHTML += `<td style="font-size: 0.8em; color: #64748b;">${prodData.name}</td>`;
 
-        zones.forEach(z => {
-            const stock = stockData[z] || 0;
-            const sales = salesData[z] || 0;
-            const pending = pendingData[z] || 0;
+        if (viewMode === 'zones') {
+            zones.forEach(z => {
+                const stock = stockData[z] || 0;
+                const sales = salesData[z] || 0;
+                const pending = pendingData[z] || 0;
 
-            const monthlyAvg = sales / histMonths;
+                const monthlyAvg = sales / histMonths;
+                const estimated = Math.ceil(monthlyAvg * projMonths);
+
+                // Formula Maestra: Sugerido = Estimado - Stock - Pendiente
+                let suggested = estimated - stock - pending;
+                if (suggested < 0) suggested = 0;
+                suggested = Math.ceil(suggested);
+
+                // Color Logic: Stock + Pending vs Estimates
+                let stockClass = "val-stock";
+                let suggStyle = "";
+                if (suggested > 0) suggStyle = "font-weight:bold; color: #2563eb; background:#f0f9ff";
+
+                const pendStyle = pending > 0 ? "color:#475569; font-weight:500" : "color:#cbd5e1";
+
+                rowHTML += `
+                    <td class="col-data ${stockClass}">${stock}</td>
+                    <td style="${pendStyle}">${pending}</td>
+                    <td class="val-sales">${sales}</td>
+                    <td class="val-est">${estimated}</td>
+                    <td style="${suggStyle}">${suggested}</td>
+                `;
+            });
+        } else {
+            // Consolidated logic
+            let totalStock = 0;
+            let totalSales = 0;
+            let totalPending = 0;
+
+            // Sum all areas (NOA, BUENOS AIRES, CORDOBA, OTROS...)
+            Object.values(stockData).forEach(v => totalStock += (Number(v) || 0));
+            Object.values(salesData).forEach(v => totalSales += (Number(v) || 0));
+            Object.values(pendingData).forEach(v => totalPending += (Number(v) || 0));
+
+            const monthlyAvg = totalSales / histMonths;
             const estimated = Math.ceil(monthlyAvg * projMonths);
 
-            // Formula Maestra: Sugerido = Estimado - Stock - Pendiente
-            let suggested = estimated - stock - pending;
+            let suggested = estimated - totalStock - totalPending;
             if (suggested < 0) suggested = 0;
             suggested = Math.ceil(suggested);
 
-            // Color Logic: Stock + Pending vs Estimates
-            // REMOVED: Red/Green logic based on user request.
-            // Keeping stockClass for potential future use or just structure.
             let stockClass = "val-stock";
-
-            // Highlight suggested
             let suggStyle = "";
             if (suggested > 0) suggStyle = "font-weight:bold; color: #2563eb; background:#f0f9ff";
 
-            // Si hay pendiente, mostrarlo en gris oscuro, sino claro
-            const pendStyle = pending > 0 ? "color:#475569; font-weight:500" : "color:#cbd5e1";
+            const pendStyle = totalPending > 0 ? "color:#475569; font-weight:500" : "color:#cbd5e1";
 
             rowHTML += `
-                <td class="col-data ${stockClass}">${stock}</td>
-                <td style="${pendStyle}">${pending}</td>
-                <td class="val-sales">${sales}</td>
+                <td class="col-data ${stockClass}">${totalStock}</td>
+                <td style="${pendStyle}">${totalPending}</td>
+                <td class="val-sales">${totalSales}</td>
                 <td class="val-est">${estimated}</td>
                 <td style="${suggStyle}">${suggested}</td>
             `;
-        });
+        }
 
         tr.innerHTML = rowHTML;
         tbody.appendChild(tr);

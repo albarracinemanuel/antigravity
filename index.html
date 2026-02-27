@@ -113,8 +113,18 @@
 
         <!-- Tabla de Resultados General -->
         <section class="results-section" id="results-section" style="display:none;">
-            <div class="actions-bar" style="text-align: right; margin-bottom: 10px;">
-                <button id="btn-export" class="btn-action" style="background-color: #10b981;">📊 Exportar a
+            <div class="actions-bar"
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div class="view-selector" style="display: flex; align-items: center; gap: 10px;">
+                    <label for="general-view-mode"
+                        style="font-weight: 500; font-size: 0.9em; color: #475569; margin: 0;">Vista:</label>
+                    <select id="general-view-mode"
+                        style="padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9em; background-color: white; color: #1e293b; cursor: pointer; height: auto;">
+                        <option value="zones">Por Zona (NOA, Bs As, Cba)</option>
+                        <option value="consolidated">Total Empresa Consolidada</option>
+                    </select>
+                </div>
+                <button id="btn-export" class="btn-action" style="background-color: #10b981; margin: 0;">📊 Exportar a
                     Excel</button>
             </div>
             <div class="table-container">
