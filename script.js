@@ -3,6 +3,8 @@ const STATE = {
     providers: null, // Map<cod_alfa, {id, name, desc}>
     stock: null,     // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }>
     sales: null,     // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }> (Processed)
+    salesByMonth: null, // Map<cod_alfa, { [YYYY-MM]: { NOA: 0, BUENOS AIRES: 0, CORDOBA: 0, OTROS: 0 } }> NEW
+    availableMonths: [], // Array<YYYY-MM> NEW
     rawSales: [],    // Array<{code, area, qty, date}> (Raw Data)
     pending: null,   // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }> NEW
     abc: null,       // Map<cod_alfa, 'A'|'B'|'C'>
@@ -61,6 +63,8 @@ const dom = {
     efficientCobB: document.getElementById('efficient-cob-b'),
     efficientCVentas: document.getElementById('efficient-c-ventas'),
     efficientCDays: document.getElementById('efficient-c-days'),
+    efficientZone: document.getElementById('efficient-zone'), // NEW
+    efficientShowMonths: document.getElementById('efficient-show-months'), // NEW
     btnRecalcEfficient: document.getElementById('btn-recalc-efficient'),
     btnExportEfficient: document.getElementById('btn-export-efficient'),
 
@@ -114,6 +118,8 @@ dom.tabs.forEach(btn => {
 });
 dom.btnRecalcEfficient.addEventListener('click', renderEfficientTable);
 dom.btnExportEfficient.addEventListener('click', exportToExcelEfficient);
+dom.efficientZone.addEventListener('change', renderEfficientTable);
+dom.efficientShowMonths.addEventListener('change', renderEfficientTable);
 
 if (dom.btnRecalcGlobalA) dom.btnRecalcGlobalA.addEventListener('click', renderGlobalA);
 if (dom.btnExportGlobalA) dom.btnExportGlobalA.addEventListener('click', exportToExcelGlobalA);
@@ -341,16 +347,32 @@ function filterAndProcessSales() {
 
     // Filter and Aggregate
     STATE.sales = {};
+    STATE.salesByMonth = {};
+    const monthsSet = new Set();
     let count = 0;
 
     STATE.rawSales.forEach(item => {
         if (item.date && item.date >= fromDate && item.date <= toDate) {
             const zone = getZone(item.area);
-            if (!STATE.sales[item.code]) STATE.sales[item.code] = { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+            if (!STATE.sales[item.code]) {
+                STATE.sales[item.code] = { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+                STATE.salesByMonth[item.code] = {};
+            }
             STATE.sales[item.code][zone] += item.qty;
+
+            const monthKey = `${item.date.getFullYear()}-${String(item.date.getMonth() + 1).padStart(2, '0')}`;
+            monthsSet.add(monthKey);
+            
+            if (!STATE.salesByMonth[item.code][monthKey]) {
+                STATE.salesByMonth[item.code][monthKey] = { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+            }
+            STATE.salesByMonth[item.code][monthKey][zone] += item.qty;
+
             count++;
         }
     });
+
+    STATE.availableMonths = Array.from(monthsSet).sort();
 
     // Calculate Months in Range
     const diffTime = Math.abs(toDate - fromDate);
@@ -673,6 +695,10 @@ function renderEfficientTable() {
     const cobB = dom.efficientCobB ? (parseFloat(dom.efficientCobB.value) || 1.5) : 1.5;
     const checkCVentas = dom.efficientCVentas ? dom.efficientCVentas.checked : true;
     const daysCVentas = dom.efficientCDays ? (parseInt(dom.efficientCDays.value) || 30) : 30;
+    
+    // UI Filters
+    const selectedZone = dom.efficientZone ? dom.efficientZone.value : 'ALL';
+    const showMonths = dom.efficientShowMonths ? dom.efficientShowMonths.checked : false;
 
     // Use Global Sales Data (Already filtered by Date Range)
     // STATE.salesDateRange has { min, max, months }
@@ -692,16 +718,33 @@ function renderEfficientTable() {
     products.forEach(code => {
         const prodData = STATE.providers[code];
         const stockData = STATE.stock[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 };
-        const totalStock = (stockData["NOA"] || 0) + (stockData["BUENOS AIRES"] || 0) + (stockData["CORDOBA"] || 0);
+        const totalStock = selectedZone === 'ALL'
+            ? (stockData["NOA"] || 0) + (stockData["BUENOS AIRES"] || 0) + (stockData["CORDOBA"] || 0)
+            : (stockData[selectedZone] || 0);
 
         const pendingData = STATE.pending[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
-        const totalPending = (pendingData["NOA"] || 0) + (pendingData["BUENOS AIRES"] || 0) + (pendingData["CORDOBA"] || 0) + (pendingData["OTROS"] || 0);
+        const totalPending = selectedZone === 'ALL'
+            ? (pendingData["NOA"] || 0) + (pendingData["BUENOS AIRES"] || 0) + (pendingData["CORDOBA"] || 0) + (pendingData["OTROS"] || 0)
+            : (pendingData[selectedZone] || 0);
+            
         const projectedStock = totalStock + totalPending;
 
         const category = (STATE.abc && STATE.abc[code]) ? STATE.abc[code] : 'C'; // Default C
 
         const salesData = STATE.sales[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
-        const salesQty = (salesData["NOA"] || 0) + (salesData["BUENOS AIRES"] || 0) + (salesData["CORDOBA"] || 0) + (salesData["OTROS"] || 0);
+        const salesQty = selectedZone === 'ALL'
+            ? (salesData["NOA"] || 0) + (salesData["BUENOS AIRES"] || 0) + (salesData["CORDOBA"] || 0) + (salesData["OTROS"] || 0)
+            : (salesData[selectedZone] || 0);
+
+        const monthlySales = {};
+        if (showMonths && STATE.availableMonths) {
+            STATE.availableMonths.forEach(month => {
+                const monthData = (STATE.salesByMonth[code] && STATE.salesByMonth[code][month]) ? STATE.salesByMonth[code][month] : {};
+                monthlySales[month] = selectedZone === 'ALL'
+                    ? (monthData["NOA"] || 0) + (monthData["BUENOS AIRES"] || 0) + (monthData["CORDOBA"] || 0) + (monthData["OTROS"] || 0)
+                    : (monthData[selectedZone] || 0);
+            });
+        }
 
         const dailyDemand = salesQty / daysAnalysis;
         const monthlyDemand = dailyDemand * 30;
@@ -737,6 +780,7 @@ function renderEfficientTable() {
             pending: totalPending,
             projectedStock: projectedStock,
             salesQty,
+            monthlySales,
             dailyDemand,
             rop,
             targetStock,
@@ -791,11 +835,22 @@ function renderEfficientTable() {
 
     const minDateInfo = STATE.salesDateRange.min || "?";
     const maxDateInfo = STATE.salesDateRange.max || "?";
+    
+    let monthsHTML = "";
+    let colspanVal = 11;
+    if (showMonths && STATE.availableMonths) {
+        STATE.availableMonths.forEach(m => {
+            monthsHTML += `<th title="Ventas del mes ${m}">${m}</th>`;
+            colspanVal++;
+        });
+    }
+
+    const zoneText = selectedZone === 'ALL' ? 'Todas las zonas (Consolidado)' : selectedZone;
 
     thead.innerHTML = `
         <tr>
-            <th colspan="11" style="background:#f1f5f9; color:#475569; font-size:0.9em; text-align:left; border:none;">
-                Periodo Analizado: ${minDateInfo} - ${maxDateInfo} (${daysAnalysis} días aprox)
+            <th colspan="${colspanVal}" style="background:#f1f5f9; color:#475569; font-size:0.9em; text-align:left; border:none;">
+                Periodo Analizado: ${minDateInfo} - ${maxDateInfo} (${daysAnalysis} días aprox) | Zona Analizada: ${zoneText}
             </th>
         </tr>
         <tr>
@@ -805,6 +860,7 @@ function renderEfficientTable() {
             <th title="Stock actual disponible en sistema">Stock Act.</th>
             <th title="Mercadería pendiente de recibir del proveedor">Pend.</th>
             <th title="Stock proyectado considerando pendiente de recibir">Stock Proy.</th>
+            ${monthsHTML}
             <th title="Ventas totales del período analizado">Ventas</th>
             <th title="Cantidad estimada de días que el stock actual puede cubrir según la venta promedio">Días Stock</th>
             <th title="Punto de Pedido. ROP = Demanda en Lead Time + % de seguridad">ROP</th>
@@ -827,14 +883,23 @@ function renderEfficientTable() {
         const riskBadge = item.isRisk ? '<span class="alert-risk">⚠ RIESGO</span>' : '';
         const suggStyle = item.suggested > 0 ? "font-weight:bold; color: #2563eb; background:#f0f9ff" : "";
 
+        let monthsCellsHTML = "";
+        if (showMonths && STATE.availableMonths) {
+            STATE.availableMonths.forEach(m => {
+                const ms = item.monthlySales[m] || 0;
+                monthsCellsHTML += `<td style="color:#64748b; font-size:0.95em; text-align:center;">${ms}</td>`;
+            });
+        }
+
         tr.innerHTML = `
             <td class="col-category">${item.category} ${riskBadge}</td>
             <td>${item.code}</td>
             <td>${item.desc}</td>
-            <td>${item.stock}</td>
-            <td>${item.pending}</td>
-            <td>${item.projectedStock}</td>
-            <td>${item.salesQty}</td>
+            <td class="col-data" style="font-weight:bold;">${item.stock}</td>
+            <td style="${item.pending > 0 ? 'color:#475569; font-weight:500' : 'color:#cbd5e1'}">${item.pending}</td>
+            <td style="color:#334155;">${item.projectedStock}</td>
+            ${monthsCellsHTML}
+            <td class="val-sales">${item.salesQty}</td>
             <td>${daysStock}</td>
             <td>${Math.ceil(item.rop)}</td>
             <td>${Math.ceil(item.targetStock)}</td>
