@@ -674,15 +674,11 @@ function renderEfficientTable() {
 
     const selectedProvider = dom.providerSelect.value;
 
-    // Validate if the selected value is one of our explicitly added dropdown options
-    let isValidProvider = false;
-    Array.from(dom.providerSelect.options).forEach(opt => {
-        if (opt.value === selectedProvider && selectedProvider !== "" && selectedProvider !== "TOP200" && selectedProvider !== "HIGH_ROTATION") {
-            isValidProvider = true;
-        }
-    });
+    // Validate: must be a non-empty value that is not a special option, and must exist in STATE.providers
+    const isSpecialOption = !selectedProvider || selectedProvider === "TOP200" || selectedProvider === "HIGH_ROTATION";
+    const existsInProviders = !isSpecialOption && Object.values(STATE.providers).some(data => data.name === selectedProvider);
 
-    if (!isValidProvider) {
+    if (!existsInProviders) {
         let displayVal = selectedProvider || 'Ninguno';
         dom.resultsTableEfficient.innerHTML = `<tbody><tr><td>Seleccione un único proveedor para el análisis. La opción '${displayVal}' no corresponde a un proveedor individual cargado.</td></tr></tbody>`;
         return;
