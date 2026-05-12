@@ -287,3 +287,36 @@ tr:hover {
     padding: 2px 6px;
     border-radius: 4px;
 }
+
+/* Editable Suggested Input */
+.sug-input {
+    width: 65px;
+    padding: 4px 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #2563eb;
+    background-color: #f0f9ff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.sug-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.sug-input.edited {
+    border-color: #f59e0b;
+    background-color: #fffbeb;
+    color: #b45309;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+}
+
+.sug-input.zero {
+    color: #94a3b8;
+    font-weight: 400;
+    background-color: white;
+}

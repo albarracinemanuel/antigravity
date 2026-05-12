@@ -115,14 +115,20 @@
         <section class="results-section" id="results-section" style="display:none;">
             <div class="actions-bar"
                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <div class="view-selector" style="display: flex; align-items: center; gap: 10px;">
-                    <label for="general-view-mode"
-                        style="font-weight: 500; font-size: 0.9em; color: #475569; margin: 0;">Vista:</label>
-                    <select id="general-view-mode"
-                        style="padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9em; background-color: white; color: #1e293b; cursor: pointer; height: auto;">
-                        <option value="zones">Por Zona (NOA, Bs As, Cba)</option>
-                        <option value="consolidated">Total Empresa Consolidada</option>
-                    </select>
+                <div class="view-selector" style="display: flex; align-items: center; gap: 15px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label for="general-view-mode"
+                            style="font-weight: 500; font-size: 0.9em; color: #475569; margin: 0;">Vista:</label>
+                        <select id="general-view-mode"
+                            style="padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9em; background-color: white; color: #1e293b; cursor: pointer; height: auto;">
+                            <option value="zones">Por Zona (NOA, Córdoba)</option>
+                            <option value="consolidated">Total Empresa Consolidada</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="general-show-months" style="cursor: pointer;">
+                        <label for="general-show-months" style="margin: 0; font-weight: 500; font-size: 0.9em; color: #475569; cursor: pointer;">Detalle mensual</label>
+                    </div>
                 </div>
                 <button id="btn-export" class="btn-action" style="background-color: #10b981; margin: 0;">📊 Exportar a
                     Excel</button>
@@ -180,7 +186,7 @@
                             <option value="ALL">Todas las zonas</option>
                             <option value="NOA">NOA</option>
                             <option value="CORDOBA">Córdoba</option>
-                            <option value="BUENOS AIRES">Buenos Aires</option>
+
                         </select>
                     </div>
                     <div style="display: flex; align-items: center; gap: 5px;">

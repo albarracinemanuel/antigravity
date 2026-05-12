@@ -1,12 +1,12 @@
 // Estado Global de la Aplicación
 const STATE = {
     providers: null, // Map<cod_alfa, {id, name, desc}>
-    stock: null,     // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }>
-    sales: null,     // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }> (Processed)
-    salesByMonth: null, // Map<cod_alfa, { [YYYY-MM]: { NOA: 0, BUENOS AIRES: 0, CORDOBA: 0, OTROS: 0 } }> NEW
-    availableMonths: [], // Array<YYYY-MM> NEW
+    stock: null,     // Map<cod_alfa, { NOA: 0, CBA: 0, OTROS: 0 }>
+    sales: null,     // Map<cod_alfa, { NOA: 0, CBA: 0, OTROS: 0 }> (Processed)
+    salesByMonth: null, // Map<cod_alfa, { [YYYY-MM]: { NOA: 0, CORDOBA: 0, OTROS: 0 } }>
+    availableMonths: [], // Array<YYYY-MM>
     rawSales: [],    // Array<{code, area, qty, date}> (Raw Data)
-    pending: null,   // Map<cod_alfa, { NOA: 0, BSAS: 0, CBA: 0, OTROS: 0 }> NEW
+    pending: null,   // Map<cod_alfa, { NOA: 0, CBA: 0, OTROS: 0 }>
     abc: null,       // Map<cod_alfa, 'A'|'B'|'C'>
     salesDateRange: { min: null, max: null, months: 1 },
     providersList: new Set(),
@@ -18,8 +18,7 @@ const BLACKLIST_CODES = ["38952-F1", "004-SEGVIDA"];
 
 // Configuración de Zonas
 const ZONES_CONFIG = {
-    "NOA": ["CENTRAL", "SALTA", "JUJUY", "NORTE INTERIOR", "NORTE CENTRO", "TUC CAPITAL", "TUC INTERIOR", "CATAMARCA", "SANTIAGO", "LA RIOJA"],
-    "BUENOS AIRES": ["CABA SAN CRISTOBAL", "MORON", "LANUS"],
+    "NOA": ["CATAMARCA", "CENTRAL", "JUJUY", "LA RIOJA", "NORTE CENTRO", "NORTE INTERIOR", "SALTA", "TUC CAPITAL", "TUC INTERIOR", "SANTIAGO"],
     "CORDOBA": ["CORDOBA"]
 };
 
@@ -51,7 +50,8 @@ const dom = {
     dateRangeInfo: document.getElementById('date-range-info'),
     dateFrom: document.getElementById('date-from'),
     dateTo: document.getElementById('date-to'),
-    generalViewMode: document.getElementById('general-view-mode'), // NEW
+    generalViewMode: document.getElementById('general-view-mode'),
+    generalShowMonths: document.getElementById('general-show-months'),
     // Efficient Mode Elements
     tabsContainer: document.getElementById('tabs-container'),
     resultsSectionGeneral: document.getElementById('results-section'),
@@ -91,7 +91,8 @@ dom.projectionMonths.addEventListener('change', renderTable);
 dom.dateFrom.addEventListener('change', filterAndProcessSales);
 dom.dateTo.addEventListener('change', filterAndProcessSales);
 document.getElementById('btn-export').addEventListener('click', exportToExcel);
-dom.generalViewMode.addEventListener('change', renderTable); // NEW
+dom.generalViewMode.addEventListener('change', renderTable);
+dom.generalShowMonths.addEventListener('change', renderTable);
 
 // Efficient Mode Listeners
 dom.tabs.forEach(btn => {
@@ -185,7 +186,7 @@ function checkAppReady() {
             if (STATE.providers[code]) {
                 const provName = STATE.providers[code].name;
                 const salesData = STATE.sales[code];
-                const total = (salesData["NOA"] || 0) + (salesData["BUENOS AIRES"] || 0) + (salesData["CORDOBA"] || 0);
+                const total = (salesData["NOA"] || 0) + (salesData["CORDOBA"] || 0);
                 if (total > 0) activeProviders.add(provName);
             }
         });
@@ -274,7 +275,7 @@ function handleStockFile(file) {
                 if (isNaN(qty)) qty = 0;
                 if (code && area) {
                     const zone = getZone(area);
-                    if (!STATE.stock[code]) STATE.stock[code] = { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+                    if (!STATE.stock[code]) STATE.stock[code] = { "NOA": 0, "CORDOBA": 0, "OTROS": 0 };
                     STATE.stock[code][zone] += qty;
                     count++;
                 }
@@ -355,7 +356,7 @@ function filterAndProcessSales() {
         if (item.date && item.date >= fromDate && item.date <= toDate) {
             const zone = getZone(item.area);
             if (!STATE.sales[item.code]) {
-                STATE.sales[item.code] = { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+                STATE.sales[item.code] = { "NOA": 0, "CORDOBA": 0, "OTROS": 0 };
                 STATE.salesByMonth[item.code] = {};
             }
             STATE.sales[item.code][zone] += item.qty;
@@ -364,7 +365,7 @@ function filterAndProcessSales() {
             monthsSet.add(monthKey);
             
             if (!STATE.salesByMonth[item.code][monthKey]) {
-                STATE.salesByMonth[item.code][monthKey] = { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+                STATE.salesByMonth[item.code][monthKey] = { "NOA": 0, "CORDOBA": 0, "OTROS": 0 };
             }
             STATE.salesByMonth[item.code][monthKey][zone] += item.qty;
 
@@ -415,7 +416,7 @@ function handlePendingFile(file) {
 
                 if (code && area) {
                     const zone = getZone(area);
-                    if (!STATE.pending[code]) STATE.pending[code] = { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+                    if (!STATE.pending[code]) STATE.pending[code] = { "NOA": 0, "CORDOBA": 0, "OTROS": 0 };
                     STATE.pending[code][zone] += qty;
                     count++;
                 }
@@ -433,7 +434,7 @@ function calculateABC() {
     // 1. Agrupar ventas totales por producto
     const productSales = [];
     Object.entries(STATE.sales).forEach(([code, data]) => {
-        const total = (data["NOA"] || 0) + (data["BUENOS AIRES"] || 0) + (data["CORDOBA"] || 0) + (data["OTROS"] || 0);
+        const total = (data["NOA"] || 0) + (data["CORDOBA"] || 0) + (data["OTROS"] || 0);
         if (total > 0) {
             productSales.push({ code, total });
         }
@@ -489,20 +490,15 @@ function renderTable() {
     }
 
     const rankedProducts = productsList.map(code => {
-        const salesData = STATE.sales[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 };
-        const totalSales = (salesData["NOA"] || 0) + (salesData["BUENOS AIRES"] || 0) + (salesData["CORDOBA"] || 0);
-        return {
-            code,
-            totalSales,
-            prodData: STATE.providers[code]
-        };
+        const salesData = STATE.sales[code] || { "NOA": 0, "CORDOBA": 0 };
+        const totalSales = (salesData["NOA"] || 0) + (salesData["CORDOBA"] || 0);
+        return { code, totalSales, prodData: STATE.providers[code] };
     });
 
     rankedProducts.sort((a, b) => b.totalSales - a.totalSales);
 
     let displayList = rankedProducts;
     if (isTop200) {
-        displayList = rankedProducts.slice(0, 200);
         displayList = rankedProducts.slice(0, 200);
         dom.providerStats.textContent = `Mostrando los 200 productos más vendidos globalmente (Base: ${histMonths} meses)`;
     } else if (isHighRotation) {
@@ -514,26 +510,42 @@ function renderTable() {
     const thead = dom.resultsTable.querySelector('thead');
     const tbody = dom.resultsTable.querySelector('tbody');
 
-    let headerHTML = `
-        <tr>
-            <th>Producto</th>
-            <th>Descripción</th>
-            <th class="col-category">Cat.</th>
-    `;
-    if (isTop200 || isHighRotation) headerHTML += `<th>Proveedor</th>`;
-
     const viewMode = dom.generalViewMode ? dom.generalViewMode.value : 'zones';
+    const showMonths = dom.generalShowMonths ? dom.generalShowMonths.checked : false;
 
-    const zones = ["NOA", "BUENOS AIRES", "CORDOBA"];
+    const zones = ["NOA", "CORDOBA"];
+
+    // --- Build Header ---
+    let headerRow1 = `<tr><th>Producto</th><th>Descripción</th><th class="col-category">Cat.</th>`;
+    if (isTop200 || isHighRotation) headerRow1 += `<th>Proveedor</th>`;
+
+    // Monthly group header
+    const monthCount = (showMonths && STATE.availableMonths) ? STATE.availableMonths.length : 0;
+    if (monthCount > 0) {
+        headerRow1 += `<th colspan="${monthCount}" class="group-header" style="background-color: #e0e7ff; color: #3730a3;">Ventas Mensuales</th>`;
+    }
 
     if (viewMode === 'zones') {
         zones.forEach(z => {
-            headerHTML += `<th colspan="5" class="group-header">${z}</th>`; // colspan 5
+            headerRow1 += `<th colspan="5" class="group-header">${z}</th>`;
         });
-        headerHTML += `</tr><tr><th></th><th></th><th></th>${(isTop200 || isHighRotation) ? '<th></th>' : ''}`;
+    } else {
+        headerRow1 += `<th colspan="5" class="group-header" style="background-color: #3b82f6; color: white;">TOTAL EMPRESA CONSOLIDADA</th>`;
+    }
+    headerRow1 += `</tr>`;
 
-        zones.forEach(z => {
-            headerHTML += `
+    // Sub-header row
+    let headerRow2 = `<tr><th></th><th></th><th></th>${(isTop200 || isHighRotation) ? '<th></th>' : ''}`;
+
+    if (monthCount > 0) {
+        STATE.availableMonths.forEach(m => {
+            headerRow2 += `<th style="font-size:0.85em; text-align:center;">${m}</th>`;
+        });
+    }
+
+    if (viewMode === 'zones') {
+        zones.forEach(() => {
+            headerRow2 += `
                 <th class="col-data" style="font-size:0.85em">Stock</th>
                 <th style="font-size:0.85em">Pend.</th>
                 <th style="font-size:0.85em">Ventas</th>
@@ -542,9 +554,7 @@ function renderTable() {
             `;
         });
     } else {
-        headerHTML += `<th colspan="5" class="group-header" style="background-color: #3b82f6; color: white;">TOTAL EMPRESA CONSOLIDADA</th>`;
-        headerHTML += `</tr><tr><th></th><th></th><th></th>${(isTop200 || isHighRotation) ? '<th></th>' : ''}`;
-        headerHTML += `
+        headerRow2 += `
             <th class="col-data" style="font-size:0.85em">Stock Total</th>
             <th style="font-size:0.85em">Pend. Total</th>
             <th style="font-size:0.85em">Ventas Totales</th>
@@ -552,23 +562,20 @@ function renderTable() {
             <th style="font-size:0.85em; background:#f0f9ff">Sug. Total</th>
         `;
     }
+    headerRow2 += `</tr>`;
 
-    headerHTML += `</tr>`;
-    thead.innerHTML = headerHTML;
-
+    thead.innerHTML = headerRow1 + headerRow2;
     tbody.innerHTML = "";
 
     displayList.forEach(item => {
         const code = item.code;
         const prodData = item.prodData;
-        const stockData = STATE.stock[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 };
-        const salesData = STATE.sales[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 };
-        const pendingData = STATE.pending[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 }; // NEW
+        const stockData = STATE.stock[code] || { "NOA": 0, "CORDOBA": 0 };
+        const salesData = STATE.sales[code] || { "NOA": 0, "CORDOBA": 0 };
+        const pendingData = STATE.pending[code] || { "NOA": 0, "CORDOBA": 0, "OTROS": 0 };
         const category = (STATE.abc && STATE.abc[code]) ? STATE.abc[code] : '-';
 
         const tr = document.createElement('tr');
-
-        // Add Layout Class
         if (category === 'A') tr.classList.add('categoria-a');
         else if (category === 'B') tr.classList.add('categoria-b');
         else if (category === 'C') tr.classList.add('categoria-c');
@@ -578,8 +585,16 @@ function renderTable() {
             <td>${prodData.desc}</td>
             <td class="col-category">${category}</td>
         `;
-
         if (isTop200 || isHighRotation) rowHTML += `<td style="font-size: 0.8em; color: #64748b;">${prodData.name}</td>`;
+
+        // Monthly detail columns
+        if (monthCount > 0) {
+            STATE.availableMonths.forEach(m => {
+                const monthData = (STATE.salesByMonth[code] && STATE.salesByMonth[code][m]) ? STATE.salesByMonth[code][m] : {};
+                const monthTotal = (monthData["NOA"] || 0) + (monthData["CORDOBA"] || 0) + (monthData["OTROS"] || 0);
+                rowHTML += `<td style="color:#64748b; font-size:0.95em; text-align:center;">${monthTotal}</td>`;
+            });
+        }
 
         if (viewMode === 'zones') {
             zones.forEach(z => {
@@ -590,33 +605,26 @@ function renderTable() {
                 const monthlyAvg = sales / histMonths;
                 const estimated = Math.ceil(monthlyAvg * projMonths);
 
-                // Formula Maestra: Sugerido = Estimado - Stock - Pendiente
                 let suggested = estimated - stock - pending;
                 if (suggested < 0) suggested = 0;
                 suggested = Math.ceil(suggested);
 
-                // Color Logic: Stock + Pending vs Estimates
-                let stockClass = "val-stock";
-                let suggStyle = "";
-                if (suggested > 0) suggStyle = "font-weight:bold; color: #2563eb; background:#f0f9ff";
-
                 const pendStyle = pending > 0 ? "color:#475569; font-weight:500" : "color:#cbd5e1";
+                const sugClass = suggested > 0 ? 'sug-input' : 'sug-input zero';
 
                 rowHTML += `
-                    <td class="col-data ${stockClass}">${stock}</td>
+                    <td class="col-data val-stock">${stock}</td>
                     <td style="${pendStyle}">${pending}</td>
                     <td class="val-sales">${sales}</td>
                     <td class="val-est">${estimated}</td>
-                    <td style="${suggStyle}">${suggested}</td>
+                    <td><input type="number" class="${sugClass}" value="${suggested}" data-original="${suggested}" data-code="${code}" data-zone="${z}" min="0" onchange="markSugEdited(this)"></td>
                 `;
             });
         } else {
-            // Consolidated logic
             let totalStock = 0;
             let totalSales = 0;
             let totalPending = 0;
 
-            // Sum all areas (NOA, BUENOS AIRES, CORDOBA, OTROS...)
             Object.values(stockData).forEach(v => totalStock += (Number(v) || 0));
             Object.values(salesData).forEach(v => totalSales += (Number(v) || 0));
             Object.values(pendingData).forEach(v => totalPending += (Number(v) || 0));
@@ -628,18 +636,15 @@ function renderTable() {
             if (suggested < 0) suggested = 0;
             suggested = Math.ceil(suggested);
 
-            let stockClass = "val-stock";
-            let suggStyle = "";
-            if (suggested > 0) suggStyle = "font-weight:bold; color: #2563eb; background:#f0f9ff";
-
             const pendStyle = totalPending > 0 ? "color:#475569; font-weight:500" : "color:#cbd5e1";
+            const sugClass = suggested > 0 ? 'sug-input' : 'sug-input zero';
 
             rowHTML += `
-                <td class="col-data ${stockClass}">${totalStock}</td>
+                <td class="col-data val-stock">${totalStock}</td>
                 <td style="${pendStyle}">${totalPending}</td>
                 <td class="val-sales">${totalSales}</td>
                 <td class="val-est">${estimated}</td>
-                <td style="${suggStyle}">${suggested}</td>
+                <td><input type="number" class="${sugClass}" value="${suggested}" data-original="${suggested}" data-code="${code}" data-zone="TOTAL" min="0" onchange="markSugEdited(this)"></td>
             `;
         }
 
@@ -650,20 +655,36 @@ function renderTable() {
     dom.resultsSection.style.display = 'block';
 }
 
+// Marca visual cuando el usuario edita manualmente un sugerido
+function markSugEdited(input) {
+    const original = parseInt(input.dataset.original) || 0;
+    const current = parseInt(input.value) || 0;
+    if (current !== original) {
+        input.classList.add('edited');
+        input.classList.remove('zero');
+    } else {
+        input.classList.remove('edited');
+        if (current === 0) input.classList.add('zero');
+    }
+}
+
 function exportToExcel() {
     if (!STATE.appReady) return;
 
     const table = document.getElementById('results-table');
     if (!table) return;
 
-    // Create workbook from table
-    const wb = XLSX.utils.table_to_book(table, { sheet: "Stock Analysis" });
+    // Clone table and replace inputs with their current values
+    const clone = table.cloneNode(true);
+    clone.querySelectorAll('input').forEach(input => {
+        const td = input.parentElement;
+        td.textContent = input.value;
+    });
 
-    // Generate filename with date
+    const wb = XLSX.utils.table_to_book(clone, { sheet: "Stock Analysis" });
+
     const today = new Date().toISOString().split('T')[0];
     const filename = `analisis_stock_${today}.xlsx`;
-
-    // Write file
     XLSX.writeFile(wb, filename);
 }
 
@@ -713,23 +734,23 @@ function renderEfficientTable() {
 
     products.forEach(code => {
         const prodData = STATE.providers[code];
-        const stockData = STATE.stock[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 };
+        const stockData = STATE.stock[code] || { "NOA": 0, "CORDOBA": 0 };
         const totalStock = selectedZone === 'ALL'
-            ? (stockData["NOA"] || 0) + (stockData["BUENOS AIRES"] || 0) + (stockData["CORDOBA"] || 0)
+            ? (stockData["NOA"] || 0) + (stockData["CORDOBA"] || 0)
             : (stockData[selectedZone] || 0);
 
-        const pendingData = STATE.pending[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+        const pendingData = STATE.pending[code] || { "NOA": 0, "CORDOBA": 0, "OTROS": 0 };
         const totalPending = selectedZone === 'ALL'
-            ? (pendingData["NOA"] || 0) + (pendingData["BUENOS AIRES"] || 0) + (pendingData["CORDOBA"] || 0) + (pendingData["OTROS"] || 0)
+            ? (pendingData["NOA"] || 0) + (pendingData["CORDOBA"] || 0) + (pendingData["OTROS"] || 0)
             : (pendingData[selectedZone] || 0);
             
         const projectedStock = totalStock + totalPending;
 
         const category = (STATE.abc && STATE.abc[code]) ? STATE.abc[code] : 'C'; // Default C
 
-        const salesData = STATE.sales[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
+        const salesData = STATE.sales[code] || { "NOA": 0, "CORDOBA": 0, "OTROS": 0 };
         const salesQty = selectedZone === 'ALL'
-            ? (salesData["NOA"] || 0) + (salesData["BUENOS AIRES"] || 0) + (salesData["CORDOBA"] || 0) + (salesData["OTROS"] || 0)
+            ? (salesData["NOA"] || 0) + (salesData["CORDOBA"] || 0) + (salesData["OTROS"] || 0)
             : (salesData[selectedZone] || 0);
 
         const monthlySales = {};
@@ -737,7 +758,7 @@ function renderEfficientTable() {
             STATE.availableMonths.forEach(month => {
                 const monthData = (STATE.salesByMonth[code] && STATE.salesByMonth[code][month]) ? STATE.salesByMonth[code][month] : {};
                 monthlySales[month] = selectedZone === 'ALL'
-                    ? (monthData["NOA"] || 0) + (monthData["BUENOS AIRES"] || 0) + (monthData["CORDOBA"] || 0) + (monthData["OTROS"] || 0)
+                    ? (monthData["NOA"] || 0) + (monthData["CORDOBA"] || 0) + (monthData["OTROS"] || 0)
                     : (monthData[selectedZone] || 0);
             });
         }
@@ -933,14 +954,14 @@ function renderGlobalA() {
 
     productsA.forEach(code => {
         const prodData = STATE.providers[code];
-        const stockData = STATE.stock[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0 };
-        const totalStock = (stockData["NOA"] || 0) + (stockData["BUENOS AIRES"] || 0) + (stockData["CORDOBA"] || 0);
+        const stockData = STATE.stock[code] || { "NOA": 0, "CORDOBA": 0 };
+        const totalStock = (stockData["NOA"] || 0) + (stockData["CORDOBA"] || 0);
 
-        const pendingData = STATE.pending[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
-        const totalPending = (pendingData["NOA"] || 0) + (pendingData["BUENOS AIRES"] || 0) + (pendingData["CORDOBA"] || 0) + (pendingData["OTROS"] || 0);
+        const pendingData = STATE.pending[code] || { "NOA": 0, "CORDOBA": 0, "OTROS": 0 };
+        const totalPending = (pendingData["NOA"] || 0) + (pendingData["CORDOBA"] || 0) + (pendingData["OTROS"] || 0);
 
-        const salesData = STATE.sales[code] || { "NOA": 0, "BUENOS AIRES": 0, "CORDOBA": 0, "OTROS": 0 };
-        const salesQty = (salesData["NOA"] || 0) + (salesData["BUENOS AIRES"] || 0) + (salesData["CORDOBA"] || 0) + (salesData["OTROS"] || 0);
+        const salesData = STATE.sales[code] || { "NOA": 0, "CORDOBA": 0, "OTROS": 0 };
+        const salesQty = (salesData["NOA"] || 0) + (salesData["CORDOBA"] || 0) + (salesData["OTROS"] || 0);
 
         const dailyDemand = salesQty / daysAnalysis;
         const demandLT = dailyDemand * leadTime;
