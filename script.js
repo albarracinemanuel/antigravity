@@ -127,6 +127,27 @@ if (dom.btnExportGlobalA) dom.btnExportGlobalA.addEventListener('click', exportT
 if (dom.globalASort) dom.globalASort.addEventListener('change', renderGlobalA);
 
 // --- Utils ---
+function formatMonthKey(monthKey) {
+    if (!monthKey) return "";
+    const parts = monthKey.split('-');
+    if (parts.length < 2) return monthKey;
+    const year = parts[0];
+    const month = parts[1];
+    const monthNames = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+    const monthIdx = parseInt(month, 10) - 1;
+    if (monthIdx < 0 || monthIdx > 11) return monthKey;
+    const shortYear = year.slice(-2);
+    return `${monthNames[monthIdx]}-${shortYear}`;
+}
+
+function getSafeFilename(baseName, providerName) {
+    let name = providerName || "general";
+    if (name === "HIGH_ROTATION") name = "ALTA ROTACION";
+    if (name === "TOP200") name = "TOP200";
+    const safeName = name.replace(/[\\\/:\*\?"<>\|]/g, "_");
+    return `${baseName} ${safeName}.xlsx`;
+}
+
 function normalizeText(text) {
     if (!text) return "";
     return text.toString().trim().toUpperCase()
@@ -519,47 +540,54 @@ function renderTable() {
     let headerRow1 = `<tr><th>Producto</th><th>Descripción</th><th class="col-category">Cat.</th>`;
     if (isTop200 || isHighRotation) headerRow1 += `<th>Proveedor</th>`;
 
-    // Monthly group header
+    // Monthly group header count
     const monthCount = (showMonths && STATE.availableMonths) ? STATE.availableMonths.length : 0;
-    if (monthCount > 0) {
-        headerRow1 += `<th colspan="${monthCount}" class="group-header" style="background-color: #e0e7ff; color: #3730a3;">Ventas Mensuales</th>`;
-    }
 
     if (viewMode === 'zones') {
         zones.forEach(z => {
-            headerRow1 += `<th colspan="5" class="group-header">${z}</th>`;
+            const colspan = 5 + monthCount;
+            headerRow1 += `<th colspan="${colspan}" class="group-header">${z}</th>`;
         });
     } else {
-        headerRow1 += `<th colspan="5" class="group-header" style="background-color: #3b82f6; color: white;">TOTAL EMPRESA CONSOLIDADA</th>`;
+        const colspan = 5 + monthCount;
+        headerRow1 += `<th colspan="${colspan}" class="group-header" style="background-color: #3b82f6; color: white;">TOTAL EMPRESA CONSOLIDADA</th>`;
     }
     headerRow1 += `</tr>`;
 
     // Sub-header row
     let headerRow2 = `<tr><th></th><th></th><th></th>${(isTop200 || isHighRotation) ? '<th></th>' : ''}`;
 
-    if (monthCount > 0) {
-        STATE.availableMonths.forEach(m => {
-            headerRow2 += `<th style="font-size:0.85em; text-align:center;">${m}</th>`;
-        });
-    }
-
     if (viewMode === 'zones') {
-        zones.forEach(() => {
+        zones.forEach(z => {
             headerRow2 += `
                 <th class="col-data" style="font-size:0.85em">Stock</th>
                 <th style="font-size:0.85em">Pend.</th>
+            `;
+            if (monthCount > 0) {
+                STATE.availableMonths.forEach(m => {
+                    headerRow2 += `<th style="font-size:0.85em; text-align:center;">${formatMonthKey(m)}</th>`;
+                });
+            }
+            headerRow2 += `
                 <th style="font-size:0.85em">Ventas</th>
                 <th style="font-size:0.85em">Estim.</th>
-                <th style="font-size:0.85em; background:#f0f9ff">Sug.</th>
+                <th style="font-size:0.85em; background:#f0f9ff">Comprar ${z}</th>
             `;
         });
     } else {
         headerRow2 += `
             <th class="col-data" style="font-size:0.85em">Stock Total</th>
             <th style="font-size:0.85em">Pend. Total</th>
+        `;
+        if (monthCount > 0) {
+            STATE.availableMonths.forEach(m => {
+                headerRow2 += `<th style="font-size:0.85em; text-align:center;">${formatMonthKey(m)}</th>`;
+            });
+        }
+        headerRow2 += `
             <th style="font-size:0.85em">Ventas Totales</th>
             <th style="font-size:0.85em">Estim. Total</th>
-            <th style="font-size:0.85em; background:#f0f9ff">Sug. Total</th>
+            <th style="font-size:0.85em; background:#f0f9ff">Comprar TOTAL</th>
         `;
     }
     headerRow2 += `</tr>`;
@@ -587,15 +615,6 @@ function renderTable() {
         `;
         if (isTop200 || isHighRotation) rowHTML += `<td style="font-size: 0.8em; color: #64748b;">${prodData.name}</td>`;
 
-        // Monthly detail columns
-        if (monthCount > 0) {
-            STATE.availableMonths.forEach(m => {
-                const monthData = (STATE.salesByMonth[code] && STATE.salesByMonth[code][m]) ? STATE.salesByMonth[code][m] : {};
-                const monthTotal = (monthData["NOA"] || 0) + (monthData["CORDOBA"] || 0) + (monthData["OTROS"] || 0);
-                rowHTML += `<td style="color:#64748b; font-size:0.95em; text-align:center;">${monthTotal}</td>`;
-            });
-        }
-
         if (viewMode === 'zones') {
             zones.forEach(z => {
                 const stock = stockData[z] || 0;
@@ -615,6 +634,17 @@ function renderTable() {
                 rowHTML += `
                     <td class="col-data val-stock">${stock}</td>
                     <td style="${pendStyle}">${pending}</td>
+                `;
+
+                if (monthCount > 0) {
+                    STATE.availableMonths.forEach(m => {
+                        const monthData = (STATE.salesByMonth[code] && STATE.salesByMonth[code][m]) ? STATE.salesByMonth[code][m] : {};
+                        const monthZoneSales = monthData[z] || 0;
+                        rowHTML += `<td style="color:#64748b; font-size:0.95em; text-align:center;">${monthZoneSales}</td>`;
+                    });
+                }
+
+                rowHTML += `
                     <td class="val-sales">${sales}</td>
                     <td class="val-est">${estimated}</td>
                     <td><input type="number" class="${sugClass}" value="${suggested}" data-original="${suggested}" data-code="${code}" data-zone="${z}" min="0" onchange="markSugEdited(this)"></td>
@@ -642,6 +672,17 @@ function renderTable() {
             rowHTML += `
                 <td class="col-data val-stock">${totalStock}</td>
                 <td style="${pendStyle}">${totalPending}</td>
+            `;
+
+            if (monthCount > 0) {
+                STATE.availableMonths.forEach(m => {
+                    const monthData = (STATE.salesByMonth[code] && STATE.salesByMonth[code][m]) ? STATE.salesByMonth[code][m] : {};
+                    const monthTotal = (monthData["NOA"] || 0) + (monthData["CORDOBA"] || 0) + (monthData["OTROS"] || 0);
+                    rowHTML += `<td style="color:#64748b; font-size:0.95em; text-align:center;">${monthTotal}</td>`;
+                });
+            }
+
+            rowHTML += `
                 <td class="val-sales">${totalSales}</td>
                 <td class="val-est">${estimated}</td>
                 <td><input type="number" class="${sugClass}" value="${suggested}" data-original="${suggested}" data-code="${code}" data-zone="TOTAL" min="0" onchange="markSugEdited(this)"></td>
@@ -668,6 +709,134 @@ function markSugEdited(input) {
     }
 }
 
+function styleExcelSheet(sheet) {
+    if (!sheet['!ref']) return;
+    const range = XLSX.utils.decode_range(sheet['!ref']);
+
+    let noaLimitCol = -1;
+    let cordobaLimitCol = -1;
+    let totalLimitCol = -1;
+
+    // Scan row 1 to identify column roles
+    for (let c = range.s.c; c <= range.e.c; c++) {
+        const cellAddr = XLSX.utils.encode_cell({ r: 1, c: c });
+        const cell = sheet[cellAddr];
+        if (cell && cell.v) {
+            const val = cell.v.toString().trim();
+            if (val === "Comprar NOA") {
+                noaLimitCol = c;
+            } else if (val === "Comprar CORDOBA") {
+                cordobaLimitCol = c;
+            } else if (val === "Comprar TOTAL") {
+                totalLimitCol = c;
+            }
+        }
+    }
+
+    const greenCols = new Set();
+    const orangeCols = new Set();
+    const blueCols = new Set();
+
+    for (let c = range.s.c; c <= range.e.c; c++) {
+        const cellAddr = XLSX.utils.encode_cell({ r: 1, c: c });
+        const cell = sheet[cellAddr];
+        if (cell && cell.v) {
+            const val = cell.v.toString().trim();
+            if (noaLimitCol !== -1 && c <= noaLimitCol) {
+                if (val === "Ventas" || val === "Estim." || val === "Comprar NOA") {
+                    greenCols.add(c);
+                }
+            }
+            if (cordobaLimitCol !== -1 && c > noaLimitCol && c <= cordobaLimitCol) {
+                if (val === "Ventas" || val === "Estim." || val === "Comprar CORDOBA") {
+                    orangeCols.add(c);
+                }
+            }
+            if (totalLimitCol !== -1) {
+                if (val === "Ventas Totales" || val === "Estim. Total" || val === "Comprar TOTAL") {
+                    blueCols.add(c);
+                }
+            }
+        }
+    }
+
+    // Now style all cells
+    for (let r = range.s.r; r <= range.e.r; r++) {
+        for (let c = range.s.c; c <= range.e.c; c++) {
+            const cellAddr = XLSX.utils.encode_cell({ r: r, c: c });
+            let cell = sheet[cellAddr];
+
+            if (!cell) continue;
+
+            // Initialize style
+            cell.s = {
+                font: { name: "Arial", sz: 10 },
+                border: {
+                    top: { style: "thin", color: { rgb: "D9D9D9" } },
+                    bottom: { style: "thin", color: { rgb: "D9D9D9" } },
+                    left: { style: "thin", color: { rgb: "D9D9D9" } },
+                    right: { style: "thin", color: { rgb: "D9D9D9" } }
+                },
+                alignment: { vertical: "center" }
+            };
+
+            // Alignment rules
+            if (r < 2) {
+                cell.s.alignment.horizontal = "center";
+                cell.s.font.bold = true;
+            } else {
+                if (c === 0 || c === 1) {
+                    cell.s.alignment.horizontal = "left";
+                } else if (c === 2) {
+                    cell.s.alignment.horizontal = "center";
+                } else {
+                    cell.s.alignment.horizontal = "center";
+                }
+            }
+
+            // Fill color rules
+            let fillColor = null;
+
+            if (r === 0) {
+                if (cell.v === "NOA") {
+                    fillColor = "E2EFDA"; // Light green
+                } else if (cell.v === "CORDOBA") {
+                    fillColor = "FCE4D6"; // Light orange
+                } else if (cell.v === "TOTAL EMPRESA CONSOLIDADA") {
+                    fillColor = "DDEBF7"; // Light blue-gray
+                } else {
+                    fillColor = "F2F2F2"; // Standard header gray
+                }
+            } else if (r === 1) {
+                if (greenCols.has(c)) {
+                    fillColor = "C6E0B4";
+                } else if (orangeCols.has(c)) {
+                    fillColor = "F8CBAD";
+                } else if (blueCols.has(c)) {
+                    fillColor = "B4C6E7";
+                } else {
+                    fillColor = "F2F2F2";
+                }
+            } else {
+                if (greenCols.has(c)) {
+                    fillColor = "E2EFDA";
+                } else if (orangeCols.has(c)) {
+                    fillColor = "FCE4D6";
+                } else if (blueCols.has(c)) {
+                    fillColor = "DDEBF7";
+                }
+            }
+
+            if (fillColor) {
+                cell.s.fill = {
+                    patternType: "solid",
+                    fgColor: { rgb: fillColor }
+                };
+            }
+        }
+    }
+}
+
 function exportToExcel() {
     if (!STATE.appReady) return;
 
@@ -682,9 +851,10 @@ function exportToExcel() {
     });
 
     const wb = XLSX.utils.table_to_book(clone, { sheet: "Stock Analysis" });
+    const sheet = wb.Sheets["Stock Analysis"];
+    styleExcelSheet(sheet);
 
-    const today = new Date().toISOString().split('T')[0];
-    const filename = `analisis_stock_${today}.xlsx`;
+    const filename = getSafeFilename("analisis", dom.providerSelect.value);
     XLSX.writeFile(wb, filename);
 }
 
@@ -857,7 +1027,8 @@ function renderEfficientTable() {
     let colspanVal = 11;
     if (showMonths && STATE.availableMonths) {
         STATE.availableMonths.forEach(m => {
-            monthsHTML += `<th title="Ventas del mes ${m}">${m}</th>`;
+            const formatted = formatMonthKey(m);
+            monthsHTML += `<th title="Ventas del mes ${formatted}">${formatted}</th>`;
             colspanVal++;
         });
     }
@@ -930,8 +1101,10 @@ function exportToExcelEfficient() {
     const table = document.getElementById('results-table-efficient');
     if (!table) return;
     const wb = XLSX.utils.table_to_book(table, { sheet: "Eficiencia" });
-    const today = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `analisis_eficiente_${today}.xlsx`);
+    const sheet = wb.Sheets["Eficiencia"];
+    styleExcelSheet(sheet);
+    const filename = getSafeFilename("analisis eficiente", dom.providerSelect.value);
+    XLSX.writeFile(wb, filename);
 }
 
 // --- Global Category A Logic ---
@@ -1071,6 +1244,8 @@ function exportToExcelGlobalA() {
     const table = document.getElementById('results-table-global-a');
     if (!table) return;
     const wb = XLSX.utils.table_to_book(table, { sheet: "Control Global A" });
-    const today = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `control_global_A_${today}.xlsx`);
+    const sheet = wb.Sheets["Control Global A"];
+    styleExcelSheet(sheet);
+    const filename = getSafeFilename("control global A", "global");
+    XLSX.writeFile(wb, filename);
 }
